@@ -83,6 +83,19 @@ export default function RepoPilotDashboard() {
   const [lastSynced, setLastSynced] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeNav, setActiveNav] = useState("Overview");
+  const [activePanel, setActivePanel] = useState<"help" | "notifications" | "activity" | "settings" | null>(null);
+  const [activity, setActivity] = useState<Array<{ id: string; message: string; time: string }>>([]);
+
+  const navigateTo = (label: string) => {
+    setActiveNav(label);
+    setMobileMenuOpen(false);
+    if (label === "Overview") { setFilter("All projects"); setQuery(""); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    else if (label === "Repositories") { setFilter("All projects"); document.getElementById("repositories")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (label === "Work board") { setFilter("In progress"); document.getElementById("repositories")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (label === "Priorities") { setFilter("Needs attention"); document.getElementById("repositories")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (label === "Activity history") setActivePanel("activity");
+    else if (label === "Settings") setActivePanel("settings");
+  };
 
   const importRepositories = useCallback(async (requestedUsername: string) => {
     const cleanUsername = requestedUsername.trim();
@@ -125,7 +138,9 @@ export default function RepoPilotDashboard() {
   }, [importRepositories]);
 
   const updateStatus = (id: number, status: ProjectStatus) => {
+    const previous = repositories.find((repository) => repository.id === id);
     const updated = repositories.map((repository) => repository.id === id ? { ...repository, status } : repository);
+    if (previous && previous.status !== status) setActivity((items) => [{ id: `${id}-${Date.now()}`, message: `${previous.name}: ${previous.status} → ${status}`, time: new Date().toLocaleString() }, ...items].slice(0, 50));
     setRepositories(updated);
     try {
       const statuses = Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status]));
@@ -162,7 +177,7 @@ export default function RepoPilotDashboard() {
         <div className="mt-9 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">Workspace</div>
         <nav className="mt-3 space-y-1">
           {navItems.map(({ label, icon: Icon }) => (
-            <button key={label} onClick={() => { setActiveNav(label); setMobileMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${activeNav === label ? "border border-lime-300/10 bg-lime-300/10 font-medium text-lime-200" : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100"}`}>
+            <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${activeNav === label ? "border border-lime-300/10 bg-lime-300/10 font-medium text-lime-200" : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100"}`}>
               <Icon size={17} />{label}
               {label === "Priorities" && attentionCount > 0 && <span className="ml-auto rounded-md bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-200">{attentionCount}</span>}
             </button>
@@ -170,8 +185,8 @@ export default function RepoPilotDashboard() {
         </nav>
         <div className="mt-8 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">Personal</div>
         <nav className="mt-3 space-y-1">
-          <button onClick={() => setActiveNav("Activity history")} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100"><Activity size={17} />Activity history</button>
-          <button onClick={() => setActiveNav("Settings")} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100"><Settings2 size={17} />Settings</button>
+          <button onClick={() => navigateTo("Activity history")} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100"><Activity size={17} />Activity history</button>
+          <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100"><Settings2 size={17} />Settings</button>
         </nav>
         <div className="mt-auto rounded-2xl border border-lime-300/10 bg-gradient-to-br from-lime-300/[0.09] to-transparent p-4">
           <div className="flex items-center gap-2 text-lime-200"><Sparkles size={16} /><span className="text-sm font-medium">AI project memory</span></div>
@@ -194,12 +209,13 @@ export default function RepoPilotDashboard() {
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="hidden items-center gap-2 rounded-full border border-line bg-white/[0.025] px-3 py-1.5 text-xs text-zinc-400 md:flex"><span className="h-1.5 w-1.5 rounded-full bg-lime-300" />Live public GitHub data</span>
-            <button aria-label="Help" className="rounded-xl p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"><CircleHelp size={18} /></button>
-            <button aria-label="Notifications" className="rounded-xl p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"><Bell size={18} /></button>
+            <button aria-label="Help and usage guide" title="Help and usage guide" onClick={() => setActivePanel("help")} className="rounded-xl p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"><CircleHelp size={18} /></button>
+            <button aria-label={`Notifications: ${attentionCount} projects need attention`} title="View notifications" onClick={() => setActivePanel("notifications")} className="relative rounded-xl p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"><Bell size={18} />{attentionCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-300 ring-2 ring-[#09090b]" />}</button>
             <a href={`https://github.com/${username}`} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-xl border border-line px-3 py-2 text-xs font-medium text-zinc-300 transition hover:border-zinc-600 hover:bg-white/5 sm:flex"><Github size={15} /> GitHub profile <ArrowUpRight size={13} /></a>
           </div>
         </header>
 
+        {activePanel && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="panel-title" className="w-full max-w-lg rounded-2xl border border-line bg-[#111114] p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-lime-200">Ghost-Machine</p><h2 id="panel-title" className="mt-2 text-xl font-semibold text-zinc-100">{activePanel === "help" ? "How to use RepoPilot" : activePanel === "notifications" ? "Project notifications" : activePanel === "activity" ? "Activity history" : "Workspace settings"}</h2></div><button onClick={() => setActivePanel(null)} aria-label="Close dialog" className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white"><X size={18} /></button></div>{activePanel === "help" ? <div className="mt-5 space-y-3 text-sm leading-6 text-zinc-300"><p><strong>Import repositories:</strong> enter a public GitHub username and select Import repositories.</p><p><strong>Search and filter:</strong> search by repository name, description, language, branch, or topic, then filter by project status.</p><p><strong>Track progress:</strong> change a repository status. It is saved in this browser for that GitHub username.</p><p><strong>Limitations:</strong> private repositories, cross-device sync, and AI summaries are not enabled yet.</p></div> : activePanel === "notifications" ? <div className="mt-5"><p className="text-sm text-zinc-400">{attentionCount ? `${attentionCount} project${attentionCount === 1 ? "" : "s"} marked for attention.` : "Nothing is marked as needing attention right now."}</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{repositories.filter((repo) => repo.status === "Needs attention").map((repo) => <a key={repo.id} href={repo.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-xl border border-line p-3 text-sm hover:bg-white/[0.03]"><span className="truncate text-zinc-200">{repo.name}</span><ExternalLink size={14} className="shrink-0 text-zinc-500" /></a>)}</div><button onClick={() => { setActivePanel(null); navigateTo("Priorities"); }} className="mt-4 rounded-xl bg-lime-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-lime-200">View priorities</button></div> : activePanel === "activity" ? <div className="mt-5">{activity.length ? <ol className="max-h-80 space-y-3 overflow-y-auto">{activity.map((item) => <li key={item.id} className="border-l border-zinc-700 pl-3"><p className="text-sm text-zinc-200">{item.message}</p><p className="mt-1 text-xs text-zinc-500">{item.time}</p></li>)}</ol> : <p className="rounded-xl border border-dashed border-zinc-700 p-5 text-sm text-zinc-400">No status changes in this session yet. Change a repository status and it will appear here.</p>}</div> : <div className="mt-5 space-y-4"><div><label htmlFor="settings-username" className="mb-2 block text-sm text-zinc-300">GitHub username</label><input id="settings-username" value={usernameInput} onChange={(event) => setUsernameInput(event.target.value)} className="min-h-11 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300" /></div><button onClick={() => { setActivePanel(null); void importRepositories(usernameInput); }} disabled={loading} className="w-full rounded-xl bg-lime-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-lime-200 disabled:opacity-50">Import this account</button><div className="rounded-xl border border-line p-3"><p className="text-sm font-medium text-zinc-200">Reset saved statuses</p><p className="mt-1 text-xs leading-5 text-zinc-500">Remove status preferences for @{username}. This cannot be undone.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Needs review" }))); setActivity((items) => [{ id: `reset-${Date.now()}`, message: `Reset saved statuses for @${username}`, time: new Date().toLocaleString() }, ...items].slice(0, 50)); setActivePanel(null); }} className="mt-3 rounded-lg border border-rose-400/25 px-3 py-2 text-xs font-medium text-rose-200 hover:bg-rose-400/10">Reset statuses</button></div></div>}<div className="mt-6 flex justify-end border-t border-line pt-4"><button onClick={() => setActivePanel(null)} className="rounded-xl border border-line px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.04]">Close</button></div></section></div>}
         <div className="mx-auto max-w-[1440px] px-4 py-7 sm:px-7 sm:py-9 lg:px-10">
           <section className="grid-bg relative overflow-hidden rounded-3xl border border-line bg-[#101013] p-6 shadow-glow sm:p-8 lg:p-9">
             <div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full bg-lime-300/[0.07] blur-3xl" />
@@ -230,7 +246,7 @@ export default function RepoPilotDashboard() {
             <MetricCard label="Needs review" value={String(needsReviewCount)} detail={`${completedCount} marked completed`} icon={CheckCircle2} accent="text-lime-200" />
           </section>
 
-          <section className="mt-10">
+          <section id="repositories" className="mt-10 scroll-mt-24">
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
               <div><p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Portfolio</p><h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Your repositories</h2><p className="mt-1 text-sm text-zinc-500">{repositories.length ? `Showing public repositories from @${username}` : "Import a GitHub username to get started."}{lastSynced ? ` · Synced at ${lastSynced}` : ""}</p></div>
               <a href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 self-start rounded-xl border border-line px-3.5 py-2.5 text-sm text-zinc-300 transition hover:border-zinc-600 hover:bg-white/[0.03] sm:self-auto">Open on GitHub <ExternalLink size={14} /></a>
