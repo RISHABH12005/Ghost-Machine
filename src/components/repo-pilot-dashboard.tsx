@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, BookOpen,
+  Activity, ArrowUpRight, Bell, BookOpen,
   CheckCircle2, ChevronDown, CircleHelp, Command, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu, Search,
   Settings2, Sparkles, Star, X, Zap, RefreshCw, CircleAlert, ExternalLink,
