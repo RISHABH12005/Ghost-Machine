@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2, ChevronDown,
   CircleHelp, CircleDot, Clock3, Code2, ExternalLink, Filter, FolderGit2,
-  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu, Plus,
+  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu,
   RefreshCw, Search, Settings2, ShieldAlert, Star, X, Zap,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
