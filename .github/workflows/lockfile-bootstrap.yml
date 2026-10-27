@@ -1,0 +1,52 @@
+name: One-time lockfile bootstrap
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lockfile-bootstrap-main
+  cancel-in-progress: false
+
+jobs:
+  generate-and-commit-lockfile:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate lockfile from package.json
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Verify clean install
+        run: npm ci
+      - name: Type-check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Audit all dependencies
+        run: npm audit --audit-level=low
+      - name: Commit lockfile to main
+        shell: bash
+        run: |
+          test -s package-lock.json
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "package-lock.json is already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build: add npm lockfile"
+          git push origin HEAD:main
