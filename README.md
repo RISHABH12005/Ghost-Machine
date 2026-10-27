@@ -2,20 +2,24 @@
 
 **RepoPilot** is an AI-assisted GitHub portfolio manager that helps developers understand their repositories, remember unfinished work, and decide what to work on next.
 
-The project is being developed for the DEV Hacktoberfest Week 4 challenge, *Ghost in the Machine*. It will use open-source AI as a core capability rather than adding AI only as decoration.
+This project is being developed for the DEV Hacktoberfest Week 4 challenge, *Ghost in the Machine*. Open-source AI is planned as a core capability for repository summaries and project-revival guidance.
+
+## Current features
+
+- Import public repositories for any GitHub username.
+- Search repository names, descriptions, languages, and topics.
+- Filter repositories by a user-selected project status, including an explicit “Not assessed” state.\n- Request an on-demand public-data assessment using open pull requests, requested reviewers, recent workflow runs, archive state, and push activity.\n- See evidence links and confidence alongside suggested status; suggestions do not change the status until the user applies them.
+- View live public metadata such as description, language, stars, update date, topics, and open issue count.
+- Store manual status choices in the current browser.
+- Responsive dark dashboard with loading, empty, and error states.
 
 ## Planned features
 
-- A unified dashboard for GitHub repositories.
-- Search and filter projects by name, technology, and workflow status.
-- Repository summaries grounded in README files, commits, issues, releases, and CI signals.
-- User-controlled project statuses, notes, and priorities.
-- Suggested next steps and a project-revival report for older repositories.
-- Optional local AI analysis through Ollama and an open-weight model.
-
-## Current status
-
-The initial UI prototype is being built. It uses clearly labeled sample repository data and does **not** yet connect to GitHub or run AI analysis. GitHub OAuth, persistent storage, repository scanning, and model integration are planned follow-up milestones.
+- GitHub OAuth for importing private repositories the user authorizes.
+- Persistent user accounts and project notes.
+- Deeper repository analysis grounded in README files, commits, issues, releases, and CI results.
+- Ollama integration with an open-weight model for summaries and next-step suggestions.
+- Project revival reports and semantic search.
 
 ## Tech stack
 
@@ -23,8 +27,9 @@ The initial UI prototype is being built. It uses clearly labeled sample reposito
 - TypeScript
 - Tailwind CSS
 - Lucide icons
+- GitHub REST API (public repository import implemented)
 - PostgreSQL and Prisma (planned)
-- GitHub OAuth and GitHub REST API (planned)
+- GitHub OAuth (planned)
 - Ollama with an open-weight model (planned)
 
 ## Getting started
@@ -40,7 +45,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment configuration
 
-Copy `.env.example` to `.env.local` when configuring integrations. Never commit real credentials or tokens.
+Copy `.env.example` to `.env.local` when configuring integrations. Never commit real credentials or tokens. The public repository importer currently requires no GitHub token.
 
 ## Development commands
 
@@ -50,6 +55,14 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+## Current limitations
+
+- Only public, non-fork repositories are imported by the current UI.
+- Private repository access is not implemented; it requires a proper GitHub OAuth flow and server-side token storage.
+- Project statuses are saved in browser local storage and are not synced across devices.
+- Status recommendations are heuristic, on-demand signals from the public GitHub API; they are not AI verdicts and may be incomplete.\n- Security alerts and private-repository analysis are unavailable without authorized GitHub access.\n- Assessment makes several public API calls per repository and can be rate-limited.\n- “Completed” is not inferred from inactivity. Use human judgment before applying any suggested status.
+- Build and CI results should be checked in GitHub Actions before considering this prototype production-ready.
 
 ## Security principles
 
