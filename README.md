@@ -1,76 +1,68 @@
-# Ghost-Machine
+# RepoPilot (Ghost-Machine)
 
-**RepoPilot** is an AI-assisted GitHub portfolio manager that helps developers understand their repositories, remember unfinished work, and decide what to work on next.
+RepoPilot is a GitHub repository dashboard for developers who want to understand their projects, keep track of unfinished work, and decide what to revisit next.
 
-This project is being developed for the DEV Hacktoberfest Week 4 challenge, *Ghost in the Machine*. Open-source AI is planned as a core capability for repository summaries and project-revival guidance.
+The current implementation imports public repository metadata and offers an on-demand, heuristic assessment based on public GitHub activity. AI-generated summaries and project-revival guidance are planned, not yet implemented.
 
-## Current features
+## Features
 
-- Import public repositories for any GitHub username.
-- Search repository names, descriptions, languages, and topics.
-- Filter repositories by a user-selected project status, including an explicit “Not assessed” state.\n- Request an on-demand public-data assessment using open pull requests, requested reviewers, recent workflow runs, archive state, and push activity.\n- See evidence links and confidence alongside suggested status; suggestions do not change the status until the user applies them.
-- View live public metadata such as description, language, stars, update date, topics, and open issue count.
-- Store manual status choices in the current browser.
-- Responsive dark dashboard with loading, empty, and error states.
-
-## Planned features
-
-- GitHub OAuth for importing private repositories the user authorizes.
-- Persistent user accounts and project notes.
-- Deeper repository analysis grounded in README files, commits, issues, releases, and CI results.
-- Ollama integration with an open-weight model for summaries and next-step suggestions.
-- Project revival reports and semantic search.
+- Import public repositories for a GitHub username.
+- Search repositories by name, description, language, and topics.
+- Assign manual project statuses, including an explicit "Not assessed" state.
+- Request an on-demand assessment based on archive state, open pull requests and requested reviewers, recent workflow runs, and push activity.
+- Review evidence links, confidence, and limitations before applying a suggested status.
+- See public metadata such as description, language, stars, topics, update date, and open issue count.
+- Keep manual status selections in browser local storage.
+- Use a responsive dark dashboard with loading, empty, and error states.
 
 ## Tech stack
 
 - Next.js App Router and React
 - TypeScript
 - Tailwind CSS
-- Lucide icons
-- GitHub REST API (public repository import implemented)
-- PostgreSQL and Prisma (planned)
-- GitHub OAuth (planned)
-- Ollama with an open-weight model (planned)
+- Lucide React
+- GitHub REST API for public repository data
 
-## Getting started
+PostgreSQL, GitHub OAuth, persistent accounts, semantic search, and Ollama-based summaries are planned.
 
-Requirements: Node.js 20 or newer and npm.
+## Requirements
+
+- Node.js 22
+- npm
+
+## Run locally
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Environment configuration
-
-Copy `.env.example` to `.env.local` when configuring integrations. Never commit real credentials or tokens. The public repository importer currently requires no GitHub token.
-
-## Development commands
+## Validate the project
 
 ```bash
-npm run dev
 npm run typecheck
 npm run lint
 npm run build
+npm audit
 ```
 
-## Current limitations
+GitHub Actions runs type-checking, lint, a production build, production-route smoke tests, and an npm security audit for changes to `main` and pull requests targeting `main`.
+
+## Environment configuration
+
+The public repository importer currently does not require a GitHub token. If adding integrations, copy `.env.example` to `.env.local` and configure values locally. Never commit real credentials, access tokens, or private keys.
+
+## Security and limitations
 
 - Only public, non-fork repositories are imported by the current UI.
-- Private repository access is not implemented; it requires a proper GitHub OAuth flow and server-side token storage.
-- Project statuses are saved in browser local storage and are not synced across devices.
-- Status recommendations are heuristic, on-demand signals from the public GitHub API; they are not AI verdicts and may be incomplete.\n- Security alerts and private-repository analysis are unavailable without authorized GitHub access.\n- Assessment makes several public API calls per repository and can be rate-limited.\n- “Completed” is not inferred from inactivity. Use human judgment before applying any suggested status.
-- Build and CI results should be checked in GitHub Actions before considering this prototype production-ready.
-
-## Security principles
-
-- Request the minimum GitHub permissions needed.
-- Keep OAuth credentials and access tokens server-side.
-- Never send secrets, environment files, or private keys to an AI model.
-- Treat model output as suggestions and show supporting evidence.
-- Let users override AI status recommendations.
+- Private repository access requires an explicit GitHub OAuth flow and server-side token storage; it is not implemented.
+- Project statuses are saved in browser local storage and are not synchronized across devices.
+- Assessment results are heuristic signals from the public GitHub API, not AI verdicts. They may be incomplete or rate-limited.
+- Security alerts and private-repository analysis are unavailable without authorized GitHub access.
+- Inactivity does not prove that a project is abandoned or complete. "Completed" should remain a human decision.
+- Treat recommendations as suggestions and inspect their evidence before applying them.
 
 ## License
 
