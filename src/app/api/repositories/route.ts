@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
             "User-Agent": "RepoPilot-Ghost-Machine",
           },
           next: { revalidate: 300 },
+          signal: AbortSignal.timeout(10_000),
         },
       );
 
