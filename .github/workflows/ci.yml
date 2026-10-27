@@ -67,3 +67,7 @@ jobs:
           valid_status="$(curl --silent --show-error --output /tmp/repopilot-assessment.json --write-out '%{http_code}' 'http://127.0.0.1:3000/api/repositories/assessment?owner=vercel&repo=next.js')"
           test "$valid_status" = "200"
           node -e "const r=require('/tmp/repopilot-assessment.json'); if (!r.status || !Array.isArray(r.evidence)) process.exit(1)"
+
+          import_status="$(curl --silent --show-error --output /tmp/repopilot-repositories.json --write-out '%{http_code}' 'http://127.0.0.1:3000/api/repositories?username=torvalds')"
+          test "$import_status" = "200"
+          node -e "const r=require('/tmp/repopilot-repositories.json'); if (r.username !== 'torvalds' || !Array.isArray(r.repositories)) process.exit(1)"
