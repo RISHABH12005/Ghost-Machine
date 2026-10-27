@@ -33,13 +33,27 @@ const headers = {
 };
 
 async function githubGet<T>(url: string): Promise<T | null> {
-  const response = await fetch(url, { headers, cache: "no-store" });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new Error("GitHub API timed out or could not be reached. Try again later.");
+  }
+
   if (response.status === 404) return null;
   if (response.status === 403 || response.status === 429) {
     throw new Error("GitHub API rate limit or permission limit reached. Try again later.");
   }
   if (!response.ok) throw new Error("GitHub could not provide enough data to assess this repository.");
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new Error("GitHub returned an invalid response. Try again later.");
+  }
 }
 
 export async function GET(request: NextRequest) {
