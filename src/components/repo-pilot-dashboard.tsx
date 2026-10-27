@@ -10,6 +10,7 @@ import {
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
 
 const DEFAULT_USERNAME = "RISHABH12005";
+type RepositoryAssessment = { status: ProjectStatus; confidence: string; assessedAt: string; evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }>; limitations?: string[]; error?: string };
 const STATUS_OPTIONS: ProjectStatus[] = ["Not assessed", "Needs review", "In progress", "Needs attention", "Completed", "On hold"];
 const STATUS_STYLES: Record<ProjectStatus, string> = {
   "Not assessed": "border-[#6e7681]/50 text-[#8b949e]",
@@ -58,7 +59,7 @@ export default function RepoPilotDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeNav, setActiveNav] = useState("Overview");
   const [activePanel, setActivePanel] = useState<"help" | "notifications" | "activity" | "settings" | null>(null);
-  const [activity, setActivity] = useState<Array<{ id: string; message: string; time: string }>>([]);
+  const [activity, setActivity] = useState<Array<{ id: string; message: string; time: string }>>([]);\n  const [assessments, setAssessments] = useState<Record<number, RepositoryAssessment>>({});\n  const [assessingId, setAssessingId] = useState<number | null>(null);
 
   const navigateTo = (label: string) => {
     setActiveNav(label);
@@ -97,6 +98,25 @@ export default function RepoPilotDashboard() {
   }, []);
 
   useEffect(() => { void importRepositories(DEFAULT_USERNAME); }, [importRepositories]);
+
+  const assessRepository = async (repository: Repository) => {
+    const [owner, name] = repository.fullName.split("/");
+    if (!owner || !name) return;
+    setAssessingId(repository.id);
+    try {
+      const response = await fetch(`/api/repositories/assessment?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(name)}`, { cache: "no-store" });
+      const result = (await response.json()) as RepositoryAssessment;
+      if (!response.ok) throw new Error(result.error || "Could not assess repository.");
+      setAssessments((items) => ({ ...items, [repository.id]: result }));
+    } catch (error) {
+      setAssessments((items) => ({ ...items, [repository.id]: { status: "Not assessed", confidence: "low", assessedAt: new Date().toISOString(), evidence: [], error: error instanceof Error ? error.message : "Assessment failed." } }));
+    } finally { setAssessingId(null); }
+  };
+
+  const applyAssessment = (repository: Repository, assessment: RepositoryAssessment) => {
+    if (assessment.status === "Not assessed") return;
+    updateStatus(repository.id, assessment.status);
+  };
 
   const updateStatus = (id: number, status: ProjectStatus) => {
     const previous = repositories.find((repository) => repository.id === id);
@@ -214,7 +234,8 @@ export default function RepoPilotDashboard() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2 sm:pl-4"><label className="sr-only" htmlFor={`status-${repository.id}`}>Status for {repository.name}</label><select id={`status-${repository.id}`} value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className="min-h-8 max-w-[170px] rounded-md border border-[#30363d] bg-[#161b22] px-2 text-xs text-[#c9d1d9] outline-none focus:border-[#2f81f7]">{STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select><a href={repository.url} target="_blank" rel="noreferrer" aria-label={`Open ${repository.name} on GitHub`} className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><ExternalLink size={15} /></a></div>
+                    <div className="flex shrink-0 items-center gap-2 sm:pl-4"><button type="button" onClick={() => void assessRepository(repository)} disabled={assessingId !== null} className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[#30363d] bg-[#161b22] px-2 text-xs hover:border-[#8b949e] disabled:opacity-50">{assessingId === repository.id ? <LoaderCircle size={12} className="animate-spin" /> : <ShieldAlert size={12} />}{assessingId === repository.id ? "Checking…" : "Assess"}</button><label className="sr-only" htmlFor={`status-${repository.id}`}>Status for {repository.name}</label><select id={`status-${repository.id}`} value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className="min-h-8 max-w-[170px] rounded-md border border-[#30363d] bg-[#161b22] px-2 text-xs text-[#c9d1d9] outline-none focus:border-[#2f81f7]">{STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select><a href={repository.url} target="_blank" rel="noreferrer" aria-label={`Open ${repository.name} on GitHub`} className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><ExternalLink size={15} /></a></div>
+                    {assessments[repository.id] && <div className="mt-3 rounded-md border border-[#30363d] bg-[#010409] p-3 sm:ml-12"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold text-[#c9d1d9]">Evidence-based assessment · {assessments[repository.id].confidence} confidence</p><p className="text-xs text-[#8b949e]">Checked {relativeDate(assessments[repository.id].assessedAt)}</p></div>{assessments[repository.id].error ? <p className="mt-2 text-sm text-[#ff7b72]">{assessments[repository.id].error}</p> : <><p className="mt-2 text-sm">Suggested status: <span className="font-semibold">{assessments[repository.id].status}</span></p>{assessments[repository.id].evidence.length > 0 ? <ul className="mt-2 space-y-1.5">{assessments[repository.id].evidence.map((item, index) => <li key={index} className="text-xs leading-5 text-[#8b949e]">• {item.url ? <a className="text-[#58a6ff] hover:underline" href={item.url} target="_blank" rel="noreferrer">{item.detail}</a> : item.detail}</li>)}</ul> : <p className="mt-2 text-xs text-[#8b949e]">No evidence was returned. Keep this repository unassessed.</p>}<div className="mt-3 flex flex-wrap items-center gap-3"><button type="button" disabled={assessments[repository.id].status === "Not assessed"} onClick={() => applyAssessment(repository, assessments[repository.id])} className="rounded-md bg-[#238636] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#2ea043] disabled:cursor-not-allowed disabled:opacity-50">Apply suggestion</button><span className="text-xs text-[#8b949e]">Suggestions never change your status until applied.</span></div></>}</div>}
                   </div>
                 </article>)}
               </div>
