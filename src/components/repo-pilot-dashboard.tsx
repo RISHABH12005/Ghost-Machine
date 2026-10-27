@@ -102,7 +102,7 @@ export default function RepoPilotDashboard() {
     const updated = repositories.map((repository) => repository.id === id ? { ...repository, status } : repository);
     if (previous && previous.status !== status) setActivity((items) => [{ id: `${id}-${Date.now()}`, message: `${previous.name}: ${previous.status} → ${status}`, time: new Date().toLocaleString() }, ...items].slice(0, 50));
     setRepositories(updated);
-    try { localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status]))); } catch { /* Status still updates for this session. */ }
+    try { localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status])))); } catch { /* Status still updates for this session. */ }
   };
 
   const filteredRepositories = useMemo(() => {
@@ -116,7 +116,6 @@ export default function RepoPilotDashboard() {
   const attentionCount = repositories.filter((repo) => repo.status === "Needs attention").length;
   const inProgressCount = repositories.filter((repo) => repo.status === "In progress").length;
   const completedCount = repositories.filter((repo) => repo.status === "Completed").length;
-  const needsReviewCount = repositories.filter((repo) => repo.status === "Needs review").length;
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
