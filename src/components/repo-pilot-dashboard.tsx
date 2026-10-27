@@ -1,0 +1,461 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  Activity,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  Bell,
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  CircleHelp,
+  Command,
+  Filter,
+  FolderGit2,
+  GitBranch,
+  Github,
+  LayoutDashboard,
+  ListTodo,
+  Menu,
+  Plus,
+  Search,
+  Settings2,
+  Sparkles,
+  Star,
+  X,
+  Zap,
+} from "lucide-react";
+
+type ProjectStatus = "In progress" | "Needs attention" | "Completed" | "On hold";
+
+type Repository = {
+  name: string;
+  description: string;
+  language: string;
+  status: ProjectStatus;
+  updated: string;
+  stars: number;
+  nextStep: string;
+  initials: string;
+  color: string;
+};
+
+const repositories: Repository[] = [
+  {
+    name: "Touch-Grass",
+    description: "Turn screen time into outdoor time with AI-verified challenges.",
+    language: "TypeScript",
+    status: "Needs attention",
+    updated: "Updated 2 days ago",
+    stars: 4,
+    nextStep: "Review production deployment and image verification.",
+    initials: "TG",
+    color: "from-lime-300/20 to-emerald-500/5 text-lime-200",
+  },
+  {
+    name: "NeuroWave",
+    description: "Explore binaural beats and brain-wave frequency bands.",
+    language: "JavaScript",
+    status: "In progress",
+    updated: "Updated 1 week ago",
+    stars: 2,
+    nextStep: "Verify continuous audio playback and document controls.",
+    initials: "NW",
+    color: "from-violet-400/20 to-indigo-500/5 text-violet-200",
+  },
+  {
+    name: "JUET-App",
+    description: "A student portal companion for useful campus information.",
+    language: "Kotlin",
+    status: "In progress",
+    updated: "Updated 2 weeks ago",
+    stars: 1,
+    nextStep: "Inspect the latest Android build and authentication flow.",
+    initials: "JA",
+    color: "from-sky-400/20 to-blue-500/5 text-sky-200",
+  },
+  {
+    name: "AnimeJS-Apk",
+    description: "An Android wrapper for exploring animation examples.",
+    language: "JavaScript",
+    status: "On hold",
+    updated: "Updated 1 month ago",
+    stars: 0,
+    nextStep: "Decide whether offline support is still a goal.",
+    initials: "AJ",
+    color: "from-pink-400/20 to-rose-500/5 text-pink-200",
+  },
+  {
+    name: "GHW-AI-Vector-Search",
+    description: "A learning project exploring AI-powered vector search.",
+    language: "Python",
+    status: "Completed",
+    updated: "Updated 2 months ago",
+    stars: 0,
+    nextStep: "Review the README before sharing the project.",
+    initials: "VS",
+    color: "from-amber-300/20 to-orange-500/5 text-amber-100",
+  },
+];
+
+const statusStyles: Record<ProjectStatus, string> = {
+  "In progress": "border-sky-400/20 bg-sky-400/10 text-sky-200",
+  "Needs attention": "border-amber-400/20 bg-amber-400/10 text-amber-200",
+  Completed: "border-lime-400/20 bg-lime-400/10 text-lime-200",
+  "On hold": "border-zinc-700 bg-zinc-800/70 text-zinc-300",
+};
+
+const navItems = [
+  { label: "Overview", icon: LayoutDashboard },
+  { label: "Repositories", icon: FolderGit2 },
+  { label: "Work board", icon: ListTodo },
+  { label: "Priorities", icon: Zap },
+];
+
+function StatusPill({ status }: { status: ProjectStatus }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles[status]}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {status}
+    </span>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  accent,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: typeof FolderGit2;
+  accent: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-panel/80 p-5 transition hover:border-zinc-600">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-zinc-400">{label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-zinc-50">{value}</p>
+        </div>
+        <span className={`rounded-xl border border-white/5 bg-white/[0.035] p-2.5 ${accent}`}>
+          <Icon size={19} />
+        </span>
+      </div>
+      <p className="mt-4 text-xs text-zinc-500">{detail}</p>
+    </div>
+  );
+}
+
+export default function RepoPilotDashboard() {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("All projects");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeNav, setActiveNav] = useState("Overview");
+
+  const filteredRepositories = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return repositories.filter((repository) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [repository.name, repository.description, repository.language, repository.nextStep]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+      const matchesFilter = filter === "All projects" || repository.status === filter;
+      return matchesQuery && matchesFilter;
+    });
+  }, [query, filter]);
+
+  const attentionCount = repositories.filter((repo) => repo.status === "Needs attention").length;
+  const inProgressCount = repositories.filter((repo) => repo.status === "In progress").length;
+  const completedCount = repositories.filter((repo) => repo.status === "Completed").length;
+
+  return (
+    <div className="min-h-screen text-zinc-100">
+      {mobileMenuOpen && (
+        <button
+          aria-label="Close navigation"
+          className="fixed inset-0 z-30 bg-black/70 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-[#0c0c0f] px-4 py-5 transition-transform lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
+        <div className="flex items-center gap-3 px-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-lime-300 text-zinc-950 shadow-glow">
+            <Command size={21} strokeWidth={2.5} />
+          </div>
+          <div>
+            <p className="text-base font-semibold tracking-tight">RepoPilot</p>
+            <p className="text-xs text-zinc-500">GitHub command center</p>
+          </div>
+          <button
+            className="ml-auto rounded-lg p-1 text-zinc-500 hover:bg-white/5 lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-9 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+          Workspace
+        </div>
+        <nav className="mt-3 space-y-1">
+          {navItems.map(({ label, icon: Icon }) => (
+            <button
+              key={label}
+              onClick={() => {
+                setActiveNav(label);
+                setMobileMenuOpen(false);
+              }}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${activeNav === label ? "border border-lime-300/10 bg-lime-300/10 font-medium text-lime-200" : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100"}`}
+            >
+              <Icon size={17} />
+              {label}
+              {label === "Priorities" && attentionCount > 0 && (
+                <span className="ml-auto rounded-md bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                  {attentionCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-8 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+          Personal
+        </div>
+        <nav className="mt-3 space-y-1">
+          <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100">
+            <Activity size={17} /> Activity history
+          </button>
+          <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100">
+            <Settings2 size={17} /> Settings
+          </button>
+        </nav>
+
+        <div className="mt-auto rounded-2xl border border-lime-300/10 bg-gradient-to-br from-lime-300/[0.09] to-transparent p-4">
+          <div className="flex items-center gap-2 text-lime-200">
+            <Sparkles size={16} />
+            <span className="text-sm font-medium">AI project memory</span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-zinc-400">
+            Soon: rediscover old projects and get evidence-backed next steps.
+          </p>
+          <span className="mt-3 inline-flex rounded-full border border-zinc-700 px-2 py-1 text-[10px] text-zinc-400">
+            AI integration planned
+          </span>
+        </div>
+
+        <div className="mt-4 flex items-center gap-3 border-t border-line px-2 pt-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-200">
+            RM
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">My workspace</p>
+            <p className="truncate text-xs text-zinc-500">Demo mode</p>
+          </div>
+          <ChevronDown size={15} className="text-zinc-500" />
+        </div>
+      </aside>
+
+      <main className="min-h-screen lg:pl-64">
+        <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-line bg-[#09090b]/85 px-4 backdrop-blur-xl sm:px-7 lg:px-10">
+          <div className="flex items-center gap-3">
+            <button
+              aria-label="Open navigation"
+              onClick={() => setMobileMenuOpen(true)}
+              className="rounded-lg border border-line p-2 text-zinc-300 lg:hidden"
+            >
+              <Menu size={18} />
+            </button>
+            <div className="hidden items-center gap-2 text-xs text-zinc-500 sm:flex">
+              <span>Workspace</span>
+              <span>/</span>
+              <span className="text-zinc-200">{activeNav}</span>
+            </div>
+            <span className="text-sm font-medium sm:hidden">{activeNav}</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="hidden items-center gap-2 rounded-full border border-line bg-white/[0.025] px-3 py-1.5 text-xs text-zinc-400 md:flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-lime-300" />
+              Local demo data
+            </span>
+            <button aria-label="Help" className="rounded-xl p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200">
+              <CircleHelp size={18} />
+            </button>
+            <button aria-label="Notifications" className="relative rounded-xl p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200">
+              <Bell size={18} />
+              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-lime-300" />
+            </button>
+            <a
+              href="https://github.com/RISHABH12005/Ghost-Machine"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden items-center gap-2 rounded-xl border border-line px-3 py-2 text-xs font-medium text-zinc-300 transition hover:border-zinc-600 hover:bg-white/5 sm:flex"
+            >
+              <Github size={15} /> Repository
+              <ArrowUpRight size={13} />
+            </a>
+          </div>
+        </header>
+
+        <div className="mx-auto max-w-[1440px] px-4 py-7 sm:px-7 sm:py-9 lg:px-10">
+          <section className="grid-bg relative overflow-hidden rounded-3xl border border-line bg-[#101013] p-6 shadow-glow sm:p-8 lg:p-9">
+            <div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full bg-lime-300/[0.07] blur-3xl" />
+            <div className="relative max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-lime-300/15 bg-lime-300/[0.06] px-3 py-1.5 text-xs text-lime-200">
+                <Sparkles size={13} /> Less searching. More building.
+              </div>
+              <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-[42px]">
+                Your projects,
+                <br className="hidden sm:block" /> back in focus.
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-400 sm:text-base sm:leading-7">
+                One home for every repository, unfinished idea, and next step. Find the project you forgot and pick up where you left off.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => setActiveNav("Repositories")}
+                  className="inline-flex items-center gap-2 rounded-xl bg-lime-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200"
+                >
+                  Explore projects <ArrowRight size={16} />
+                </button>
+                <span className="inline-flex items-center gap-2 text-xs text-zinc-500">
+                  <Github size={14} /> GitHub connection coming next
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Tracked projects" value={String(repositories.length)} detail="Sample repositories in this preview" icon={FolderGit2} accent="text-zinc-300" />
+            <MetricCard label="In progress" value={String(inProgressCount)} detail="Projects with work to continue" icon={GitBranch} accent="text-sky-200" />
+            <MetricCard label="Needs attention" value={String(attentionCount)} detail="Review these first" icon={Zap} accent="text-amber-200" />
+            <MetricCard label="Completed" value={String(completedCount)} detail="Ready to revisit or showcase" icon={CheckCircle2} accent="text-lime-200" />
+          </section>
+
+          <section className="mt-10">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Portfolio</p>
+                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Your projects</h2>
+                <p className="mt-1 text-sm text-zinc-500">A sample workspace to shape the first version.</p>
+              </div>
+              <button
+                onClick={() => setActiveNav("Repositories")}
+                className="inline-flex items-center gap-2 self-start rounded-xl border border-line px-3.5 py-2.5 text-sm text-zinc-300 transition hover:border-zinc-600 hover:bg-white/[0.03] sm:self-auto"
+              >
+                <Plus size={15} /> Add repository
+              </button>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 md:flex-row">
+              <label className="flex min-h-11 flex-1 items-center gap-2.5 rounded-xl border border-line bg-panel px-3.5 transition focus-within:border-zinc-500">
+                <Search size={17} className="shrink-0 text-zinc-500" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search projects, languages, or next steps..."
+                  className="w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+                  aria-label="Search repositories"
+                />
+                {query && (
+                  <button onClick={() => setQuery("")} aria-label="Clear search" className="text-zinc-500 hover:text-white">
+                    <X size={15} />
+                  </button>
+                )}
+              </label>
+              <label className="flex min-h-11 items-center gap-2 rounded-xl border border-line bg-panel px-3.5 text-sm text-zinc-400">
+                <Filter size={16} />
+                <select
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                  className="max-w-[190px] bg-transparent pr-2 text-sm outline-none"
+                  aria-label="Filter by status"
+                >
+                  <option>All projects</option>
+                  <option>In progress</option>
+                  <option>Needs attention</option>
+                  <option>Completed</option>
+                  <option>On hold</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {filteredRepositories.map((repository) => (
+                <article key={repository.name} className="group rounded-2xl border border-line bg-panel/70 p-5 transition duration-200 hover:-translate-y-0.5 hover:border-zinc-600 hover:bg-panel sm:p-6">
+                  <div className="flex items-start gap-4">
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/5 bg-gradient-to-br text-sm font-semibold ${repository.color}`}>
+                      {repository.initials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-zinc-100">{repository.name}</h3>
+                        <StatusPill status={repository.status} />
+                      </div>
+                      <p className="mt-2 min-h-10 text-sm leading-5 text-zinc-400">{repository.description}</p>
+                    </div>
+                    <button aria-label={`Open ${repository.name} options`} className="rounded-lg p-1.5 text-zinc-600 transition hover:bg-white/5 hover:text-zinc-200">
+                      <ArrowUpRight size={17} />
+                    </button>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line pb-4 text-xs text-zinc-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-zinc-500" /> {repository.language}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5"><Star size={13} /> {repository.stars} stars</span>
+                    <span>{repository.updated}</span>
+                  </div>
+                  <div className="mt-4 rounded-xl border border-white/[0.04] bg-white/[0.02] p-3.5">
+                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
+                      <ArrowDownRight size={14} className="text-lime-200" /> Suggested next step
+                    </div>
+                    <p className="mt-2 text-sm leading-5 text-zinc-400">{repository.nextStep}</p>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-zinc-600">Example content · Not live-synced</span>
+                    <a
+                      href={`https://github.com/RISHABH12005/${repository.name}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-300 transition hover:text-lime-200"
+                    >
+                      View on GitHub <ArrowUpRight size={13} />
+                    </a>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {filteredRepositories.length === 0 && (
+              <div className="mt-4 rounded-2xl border border-dashed border-zinc-700 px-6 py-14 text-center">
+                <Search size={24} className="mx-auto text-zinc-600" />
+                <h3 className="mt-3 font-medium text-zinc-200">No matching projects</h3>
+                <p className="mt-1 text-sm text-zinc-500">Try another search term or clear the status filter.</p>
+                <button onClick={() => { setQuery(""); setFilter("All projects"); }} className="mt-4 text-sm font-medium text-lime-200 hover:text-lime-100">
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </section>
+
+          <footer className="mt-12 flex flex-col gap-2 border-t border-line py-6 text-xs text-zinc-600 sm:flex-row sm:items-center sm:justify-between">
+            <span>RepoPilot · An open-source project from Ghost-Machine</span>
+            <span className="inline-flex items-center gap-1.5"><BookOpen size={13} /> Prototype phase</span>
+          </footer>
+        </div>
+      </main>
+    </div>
+  );
+}
