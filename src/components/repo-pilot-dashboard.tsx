@@ -59,7 +59,9 @@ export default function RepoPilotDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeNav, setActiveNav] = useState("Overview");
   const [activePanel, setActivePanel] = useState<"help" | "notifications" | "activity" | "settings" | null>(null);
-  const [activity, setActivity] = useState<Array<{ id: string; message: string; time: string }>>([]);\n  const [assessments, setAssessments] = useState<Record<number, RepositoryAssessment>>({});\n  const [assessingId, setAssessingId] = useState<number | null>(null);
+  const [activity, setActivity] = useState<Array<{ id: string; message: string; time: string }>>([]);
+  const [assessments, setAssessments] = useState<Record<number, RepositoryAssessment>>({});
+  const [assessingId, setAssessingId] = useState<number | null>(null);
 
   const navigateTo = (label: string) => {
     setActiveNav(label);
