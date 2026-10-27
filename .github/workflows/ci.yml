@@ -25,8 +25,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install locked dependencies
+        run: npm ci
 
       - name: Type-check
         run: npm run typecheck
@@ -36,3 +36,34 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Smoke-test production server and security headers
+        env:
+          PORT: 3000
+        run: |
+          npm run start -- --hostname 127.0.0.1 > /tmp/repopilot-next.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --show-error --fail http://127.0.0.1:3000/ -o /tmp/repopilot-home.html; then
+              break
+            fi
+            sleep 2
+          done
+
+          test -s /tmp/repopilot-home.html
+          grep -qi 'RepoPilot' /tmp/repopilot-home.html
+
+          headers="$(curl --silent --show-error --head http://127.0.0.1:3000/)"
+          printf '%s\n' "$headers" | grep -qi '^x-frame-options: DENY'
+          printf '%s\n' "$headers" | grep -qi '^x-content-type-options: nosniff'
+          printf '%s\n' "$headers" | grep -qi '^referrer-policy: strict-origin-when-cross-origin'
+
+          invalid_status="$(curl --silent --show-error --output /tmp/repopilot-invalid.json --write-out '%{http_code}' 'http://127.0.0.1:3000/api/repositories/assessment?owner=bad%2Fowner&repo=next.js')"
+          test "$invalid_status" = "400"
+          node -e "const r=require('/tmp/repopilot-invalid.json'); if (!r.error) process.exit(1)"
+
+          valid_status="$(curl --silent --show-error --output /tmp/repopilot-assessment.json --write-out '%{http_code}' 'http://127.0.0.1:3000/api/repositories/assessment?owner=vercel&repo=next.js')"
+          test "$valid_status" = "200"
+          node -e "const r=require('/tmp/repopilot-assessment.json'); if (!r.status || !Array.isArray(r.evidence)) process.exit(1)"
