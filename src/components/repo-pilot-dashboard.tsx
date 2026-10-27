@@ -125,14 +125,12 @@ export default function RepoPilotDashboard() {
   }, [importRepositories]);
 
   const updateStatus = (id: number, status: ProjectStatus) => {
-    setRepositories((current) => {
-      const updated = current.map((repository) => repository.id === id ? { ...repository, status } : repository);
-      try {
-        const statuses = Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status]));
-        localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(statuses));
-      } catch { /* Browser storage can be disabled; status still updates for this session. */ }
-      return updated;
-    });
+    const updated = repositories.map((repository) => repository.id === id ? { ...repository, status } : repository);
+    setRepositories(updated);
+    try {
+      const statuses = Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status]));
+      localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(statuses));
+    } catch { /* Browser storage can be disabled; status still updates for this session. */ }
   };
 
   const filteredRepositories = useMemo(() => {
