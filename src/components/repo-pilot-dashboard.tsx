@@ -196,7 +196,7 @@ export default function RepoPilotDashboard() {
         <div className="mt-4 flex items-center gap-3 border-t border-line px-2 pt-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-200">{username.slice(0, 2).toUpperCase()}</div>
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{username}</p><p className="truncate text-xs text-zinc-500">Public repository mode</p></div>
-          <ChevronDown size={15} className="text-zinc-500" />
+          <button onClick={() => navigateTo("Settings")} aria-label="Open workspace settings" title="Workspace settings" className="rounded-lg p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"><ChevronDown size={15} /></button>
         </div>
       </aside>
 
