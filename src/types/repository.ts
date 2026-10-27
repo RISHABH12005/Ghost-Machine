@@ -1,4 +1,5 @@
 export type ProjectStatus =
+  | "Not assessed"
   | "Needs review"
   | "In progress"
   | "Needs attention"
