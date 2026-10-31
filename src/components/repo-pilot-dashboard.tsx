@@ -301,29 +301,39 @@ export default function RepoPilotDashboard() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {mobileMenuOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-[#30363d] bg-[#0d1117] px-3 py-4 transition-transform lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="border-b border-[#30363d] px-2 pb-4">
-          <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 py-2 text-left text-sm hover:border-[#8b949e]"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#30363d] text-[10px] font-semibold">{username.slice(0,2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate">{username}</span><ChevronDown size={14} className="text-[#8b949e]" /></button>
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-[#30363d] bg-[#0d1117] px-3 py-4 transition-all lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} ${sidebarCollapsed ? "lg:w-[76px]" : "lg:w-[260px]"}`}>
+        <div className={`flex items-center gap-2 px-2 pb-4 ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f0f6fc] text-[#0d1117]"><Github size={22} /></div>
+          {!sidebarCollapsed && <div className="min-w-0"><p className="text-sm font-semibold text-[#f0f6fc]">RepoPilot</p><p className="text-xs text-[#8b949e]">Your repository workspace</p></div>}
+          <button className="ml-auto rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
         </div>
-        <div className="mt-5 px-2 text-xs font-semibold text-[#8b949e]">Workspace</div>
+        <div className="border-b border-[#30363d] px-2 pb-4">
+          <a href={`https://github.com/${username}`} target="_blank" rel="noreferrer" title="View GitHub profile" className={`flex items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 py-2 text-sm hover:border-[#8b949e] ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#30363d] text-[10px] font-semibold">{username.slice(0,2).toUpperCase()}</span>
+            {!sidebarCollapsed && <><span className="min-w-0 flex-1 truncate">{username}</span><ExternalLink size={13} className="text-[#8b949e]" /></>}
+          </a>
+          {!sidebarCollapsed && <a href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 px-1 text-xs text-[#8b949e] hover:text-[#58a6ff]"><FolderGit2 size={13}/> Browse all GitHub repositories <ExternalLink size={11}/></a>}
+        </div>
+        {!sidebarCollapsed && <div className="mt-5 px-2 text-xs font-semibold text-[#8b949e]">Workspace</div>}
         <nav className="mt-2 space-y-1">
-          {navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{label}{label === "Priorities" && attentionCount > 0 && <span className="ml-auto rounded-full bg-[#d29922]/15 px-2 py-0.5 text-xs text-[#e3b341]">{attentionCount}</span>}</button>)}
+          {navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{!sidebarCollapsed && label}{label === "Priorities" && attentionCount > 0 && <span className={`rounded-full bg-[#d29922]/15 px-2 py-0.5 text-xs text-[#e3b341] ${sidebarCollapsed ? "lg:ml-0 ml-auto" : "ml-auto"}`}>{attentionCount}</span>}</button>)}
         </nav>
-        <div className="mt-6 px-2 text-xs font-semibold text-[#8b949e]">Personal</div>
+        {!sidebarCollapsed && <div className="mt-6 px-2 text-xs font-semibold text-[#8b949e]">Personal</div>}
         <nav className="mt-2 space-y-1">
-          <button onClick={() => navigateTo("Activity history")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]"><Activity size={16} className="text-[#8b949e]" />Activity history</button>
-          <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]"><Settings2 size={16} className="text-[#8b949e]" />Settings</button>
+          <button onClick={() => navigateTo("Activity history")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Activity history"><Activity size={16} className="text-[#8b949e]" />{!sidebarCollapsed && "Activity history"}</button>
+          <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Settings"><Settings2 size={16} className="text-[#8b949e]" />{!sidebarCollapsed && "Settings"}</button>
         </nav>
       </aside>
 
-      <main className="min-h-screen lg:pl-[260px]">
+      <main className={`min-h-screen transition-all ${sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[260px]"}`}>
         <header className="sticky top-0 z-20 flex min-h-[64px] items-center justify-between gap-3 border-b border-[#30363d] bg-[#010409]/95 px-4 backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <button aria-label="Open navigation" onClick={() => setMobileMenuOpen(true)} className="rounded-md border border-[#30363d] p-2 text-[#c9d1d9] lg:hidden"><Menu size={17} /></button>
+            <button aria-label="Toggle navigation" title="Toggle navigation" onClick={toggleSidebar} className="rounded-md border border-[#30363d] p-2 text-[#c9d1d9] hover:bg-[#21262d]"><Menu size={17} /></button>
             <div className="hidden items-center gap-2 text-sm sm:flex"><Github size={19} /><span className="text-[#8b949e]">/</span><span className="font-semibold">{username}</span><span className="text-[#8b949e]">/</span><span className="truncate text-[#8b949e]">{activeNav}</span></div>
             <span className="truncate text-sm font-semibold sm:hidden">RepoPilot / {activeNav}</span>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <button title="AI suggestions" aria-label="Toggle AI suggestions" onClick={toggleAiSidebar} className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs ${aiSidebarOpen ? "border-[#8957e5]/70 bg-[#8957e5]/15 text-[#d2a8ff]" : "border-[#30363d] text-[#c9d1d9] hover:bg-[#21262d]"}`}>{aiSidebarOpen ? <PanelRightClose size={15}/> : <PanelRightOpen size={15}/>}<span className="hidden sm:inline">AI suggestions</span></button>
             <button title="Notifications" aria-label="Notifications" onClick={() => setActivePanel("notifications")} className="relative rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><Bell size={17} />{attentionCount > 0 && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#e3b341]" />}</button>
             <a href="/api/auth/github" className="ml-1 inline-flex items-center gap-2 rounded-md border border-[#238636] bg-[#238636] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#2ea043] sm:px-3 sm:text-sm"><Github size={15} /><span>{githubUser ? `@${githubUser.login}` : "Sign in with GitHub"}</span></a>{githubUser && <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); setGithubUser(null); setRepositories([]); setUsername(""); }} className="rounded-md border border-[#30363d] px-2.5 py-1.5 text-xs hover:bg-[#21262d]">Sign out</button>}<a href={`https://github.com/${username}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-2.5 py-1.5 text-xs hover:border-[#8b949e]"><span className="hidden sm:inline">View profile</span><ExternalLink size={12} /></a>
           </div>
