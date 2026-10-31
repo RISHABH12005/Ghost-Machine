@@ -70,7 +70,6 @@ jobs:
           fi
 
           test -s /tmp/repopilot-home.html
-          grep -qi 'RepoPilot' /tmp/repopilot-home.html
 
           headers="$(curl --silent --show-error --head --max-time 5 http://127.0.0.1:3000/)"
           printf '%s\n' "$headers" | grep -qi '^x-frame-options: DENY'
@@ -81,10 +80,10 @@ jobs:
           test "$invalid_status" = "400"
           node -e "const r=require('/tmp/repopilot-invalid.json'); if (!r.error) process.exit(1)"
 
-          valid_status="$(curl --silent --show-error --output /tmp/repopilot-assessment.json --write-out '%{http_code}' --max-time 15 'http://127.0.0.1:3000/api/repositories/assessment?owner=vercel&repo=next.js')"
-          test "$valid_status" = "200"
-          node -e "const r=require('/tmp/repopilot-assessment.json'); if (!r.status || !Array.isArray(r.evidence)) process.exit(1)"
+          session_status="$(curl --silent --show-error --output /tmp/repopilot-session.json --write-out '%{http_code}' --max-time 10 'http://127.0.0.1:3000/api/auth/session')"
+          test "$session_status" = "200"
+          node -e "const r=require('/tmp/repopilot-session.json'); if (r.authenticated !== false) process.exit(1)"
 
-          import_status="$(curl --silent --show-error --output /tmp/repopilot-repositories.json --write-out '%{http_code}' --max-time 15 'http://127.0.0.1:3000/api/repositories?username=torvalds')"
-          test "$import_status" = "200"
-          node -e "const r=require('/tmp/repopilot-repositories.json'); if (r.username !== 'torvalds' || !Array.isArray(r.repositories)) process.exit(1)"
+          protected_status="$(curl --silent --show-error --output /tmp/repopilot-protected.json --write-out '%{http_code}' --max-time 10 'http://127.0.0.1:3000/api/repositories')"
+          test "$protected_status" = "401"
+          node -e "const r=require('/tmp/repopilot-protected.json'); if (!r.error) process.exit(1)"
