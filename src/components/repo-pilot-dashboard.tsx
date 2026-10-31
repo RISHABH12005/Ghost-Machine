@@ -229,7 +229,8 @@ export default function RepoPilotDashboard() {
     const normalizedQuery = query.trim().toLowerCase();
     const filtered = repositories.filter((repository) => {
       const matchesQuery = !normalizedQuery || [repository.name, repository.fullName, repository.description, repository.language, repository.defaultBranch, repository.topics.join(" ")].join(" ").toLowerCase().includes(normalizedQuery);
-      return matchesQuery && (filter === "All projects" || repository.status === filter);
+      const aiStatus = organizationMode === "ai" ? aiOrganization?.projects.find((item) => item.id === repository.id)?.status : undefined;
+      return matchesQuery && (filter === "All projects" || (organizationMode === "ai" && aiStatus ? aiStatus : repository.status) === filter);
     });
     if (organizationMode === "ai" && aiOrganization) {
       const ranking = new Map(aiOrganization.projects.map((item) => [item.id, item]));
