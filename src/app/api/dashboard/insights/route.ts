@@ -97,6 +97,20 @@ export async function GET(request: NextRequest) {
     if (!collection || !calendar) throw new Error(analytics.errors?.[0]?.message || "GitHub did not return contribution history.");
     const achievementsHtml = profileResponse?.ok ? await profileResponse.text() : "";
     const achievements = extractAchievements(achievementsHtml);
+    let organizationContributions: Array<{ id: string; login: string; name: string; avatarUrl: string; url: string; contributions: number }> = organizations.map((org) => ({ ...org, contributions: 0 }));
+    if (organizations.length) {
+      const orgFields = organizations.slice(0, 20).map((org, index) =>
+        `org${index}: contributionsCollection(organizationID: "${org.id}", from: "${from.toISOString()}", to: "${to.toISOString()}") { contributionCalendar { totalContributions } }`
+      ).join("\n");
+      const orgQuery = `query OrganizationContributions { viewer { ${orgFields} } }`;
+      try {
+        const orgResult = await graphql(session.accessToken, orgQuery, {});
+        organizationContributions = organizationContributions.map((org, index) => ({
+          ...org,
+          contributions: Number((orgResult.data?.viewer as Record<string, { contributionCalendar?: { totalContributions?: number } }> | undefined)?.[`org${index}`]?.contributionCalendar?.totalContributions || 0),
+        }));
+      } catch { /* Keep organization logos visible if GitHub does not expose org-scoped contribution totals. */ }
+    }
 
     const quarters = [0, 1, 2, 3].map((quarter) => {
       const startMonth = quarter * 3;
@@ -139,7 +153,7 @@ export async function GET(request: NextRequest) {
       totalPullRequests: collection.totalPullRequestContributions,
       totalIssues: collection.totalIssueContributions,
       days: calendar.weeks.flatMap((week) => week.contributionDays),
-      organizations,
+      organizations: organizationContributions,
       achievements,
       achievementsAvailable: achievements.length > 0,
       activitySeries,
