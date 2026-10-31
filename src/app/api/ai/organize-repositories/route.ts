@@ -10,6 +10,8 @@ type InputRepository = {
   stars?: number; updatedAt?: string; pushedAt?: string | null; archived?: boolean;
   openIssues?: number; topics?: string[]; status?: string;
 };
+type ProjectSuggestion = { id: number; status: string; priority: number; reason: string };
+const VALID_STATUSES = ["Needs attention", "Needs review", "In progress", "Completed", "On hold", "Not assessed"];
 
 async function chooseModel(apiKey: string): Promise<string> {
   const configured = process.env.OLLAMA_MODEL?.trim();
@@ -33,6 +35,79 @@ async function chooseModel(apiKey: string): Promise<string> {
   return models[0];
 }
 
+function parseModelJson(content: string): { projects?: ProjectSuggestion[] } {
+  const cleaned = content.trim()
+    .replace(/^\uFEFF/, "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    return JSON.parse(cleaned) as { projects?: ProjectSuggestion[] };
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1)) as { projects?: ProjectSuggestion[] };
+    throw new Error("Ollama returned an incomplete or invalid JSON response.");
+  }
+}
+
+async function classifyBatch(apiKey: string, model: string, batch: InputRepository[]): Promise<ProjectSuggestion[]> {
+  const compact = batch.map((repo) => ({
+    id: repo.id, name: repo.name, fullName: repo.fullName,
+    description: (repo.description || "").slice(0, 350), language: repo.language || "",
+    stars: repo.stars || 0, updatedAt: repo.updatedAt || "", pushedAt: repo.pushedAt || null,
+    archived: Boolean(repo.archived), openIssues: repo.openIssues || 0,
+    topics: (repo.topics || []).slice(0, 8), currentManualStatus: repo.status || "Not assessed",
+  }));
+  const prompt = [
+    "You are RepoPilot, an expert software project portfolio organizer.",
+    "Classify every supplied repository using only the metadata provided. Do not invent repository contents or claim source-code inspection.",
+    "Return ONLY valid JSON with this exact shape: {\"projects\":[{\"id\":number,\"status\":\"Needs attention\"|\"Needs review\"|\"In progress\"|\"Completed\"|\"On hold\"|\"Not assessed\",\"priority\":1|\"2\"|\"3\"|\"4\"|\"5\",\"reason\":\"short evidence-based explanation\"}]}",
+    "Priority must be an integer from 1 to 5. Archived repositories should be On hold. Do not mark a project Completed merely because it is inactive. Use Not assessed when evidence is insufficient. Keep each reason under 18 words.",
+    "Include every input id exactly once. Do not include markdown fences or extra text.",
+    JSON.stringify(compact),
+  ].join("\n");
+  let response = await fetch("https://ollama.com/api/chat", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      model, messages: [{ role: "user", content: prompt }], format: "json", stream: false,
+      options: { temperature: 0.1, num_predict: 2048 },
+    }),
+    cache: "no-store", signal: AbortSignal.timeout(90000),
+  });
+  if (response.status === 402 && !model.toLowerCase().includes("gemma4:31b-cloud")) {
+    response = await fetch("https://ollama.com/api/chat", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        model: "gemma4:31b-cloud", messages: [{ role: "user", content: prompt }], format: "json", stream: false,
+        options: { temperature: 0.1, num_predict: 2048 },
+      }),
+      cache: "no-store", signal: AbortSignal.timeout(90000),
+    });
+  }
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new Error(`Ollama Cloud failed to organize a batch (HTTP ${response.status}). ${detail}`);
+  }
+  const result = await response.json() as { message?: { content?: string }; model?: string };
+  const parsed = parseModelJson(result.message?.content || "");
+  const projects = parsed.projects;
+  if (!Array.isArray(projects) || projects.length !== batch.length) {
+    throw new Error(`Ollama returned ${Array.isArray(projects) ? projects.length : 0} classifications for a batch of ${batch.length}. Please retry.`);
+  }
+  const allowed = new Set(batch.map((repo) => repo.id));
+  const valid = projects.filter((item) =>
+    item && allowed.has(item.id) && VALID_STATUSES.includes(item.status) &&
+    Number.isInteger(item.priority) && item.priority >= 1 && item.priority <= 5 &&
+    typeof item.reason === "string"
+  );
+  if (valid.length !== batch.length || new Set(valid.map((item) => item.id)).size !== batch.length) {
+    throw new Error("Ollama returned invalid or duplicate project classifications. Please retry.");
+  }
+  return valid;
+}
+
 export async function POST(request: NextRequest) {
   const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
   if (!session) return NextResponse.json({ error: "Sign in with GitHub before organizing projects." }, { status: 401 });
@@ -51,58 +126,23 @@ export async function POST(request: NextRequest) {
     typeof repo.fullName === "string" && repo.fullName.length <= 200
   );
   if (!valid) return NextResponse.json({ error: "One or more repository records are invalid." }, { status: 400 });
+  if (new Set(repositories.map((repo) => repo.id)).size !== repositories.length) {
+    return NextResponse.json({ error: "Repository list contains duplicate IDs." }, { status: 400 });
+  }
 
   try {
     const model = await chooseModel(apiKey);
-    const compact = repositories.map((repo) => ({
-      id: repo.id, name: repo.name, fullName: repo.fullName,
-      description: (repo.description || "").slice(0, 500), language: repo.language || "",
-      stars: repo.stars || 0, updatedAt: repo.updatedAt || "", pushedAt: repo.pushedAt || null,
-      archived: Boolean(repo.archived), openIssues: repo.openIssues || 0,
-      topics: (repo.topics || []).slice(0, 10), currentManualStatus: repo.status || "Not assessed",
-    }));
-    const prompt = [
-      "You are RepoPilot, an expert software project portfolio organizer.",
-      "Classify every supplied repository using only the metadata provided. Do not invent repository contents or claim source-code inspection.",
-      "Return ONLY valid JSON with this exact shape: {\"projects\":[{\"id\":number,\"status\":\"Needs attention\"|\"Needs review\"|\"In progress\"|\"Completed\"|\"On hold\"|\"Not assessed\",\"priority\":1|2|3|4|5,\"reason\":\"short evidence-based explanation\"}]}",
-      "Priority 1 means most urgent; 5 means lowest urgency. Archived repositories should be On hold. Do not mark a project Completed merely because it is inactive. Use Not assessed when evidence is insufficient. Keep each reason under 25 words. Include every input id exactly once.",
-      JSON.stringify(compact),
-    ].join("\n");
-    let response = await fetch("https://ollama.com/api/chat", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], format: "json", stream: false }),
-      cache: "no-store", signal: AbortSignal.timeout(90000),
-    });
-    let activeModel = model;
-    if (response.status === 402 && !model.toLowerCase().includes("gemma4:31b-cloud")) {
-      activeModel = "gemma4:31b-cloud";
-      response = await fetch("https://ollama.com/api/chat", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ model: activeModel, messages: [{ role: "user", content: prompt }], format: "json", stream: false }),
-        cache: "no-store", signal: AbortSignal.timeout(90000),
-      });
+    // Smaller batches prevent long portfolio responses from being truncated or malformed.
+    const batches: InputRepository[][] = [];
+    for (let index = 0; index < repositories.length; index += 10) batches.push(repositories.slice(index, index + 10));
+    const projects: ProjectSuggestion[] = [];
+    for (let index = 0; index < batches.length; index += 3) {
+      const results = await Promise.all(batches.slice(index, index + 3).map((batch) => classifyBatch(apiKey, model, batch)));
+      projects.push(...results.flat());
     }
-    if (!response.ok) {
-      const detail = (await response.text()).slice(0, 700);
-      return NextResponse.json({ error: `Ollama Cloud failed to organize projects (HTTP ${response.status}). ${detail}` }, { status: 502 });
-    }
-    const result = await response.json() as { message?: { content?: string }; model?: string };
-    let parsed: { projects?: Array<{ id: number; status: string; priority: number; reason: string }> };
-    try { parsed = JSON.parse(result.message?.content || "") as typeof parsed; }
-    catch { return NextResponse.json({ error: "Ollama returned an invalid project organization. Please retry." }, { status: 502 }); }
-    const allowed = new Set(repositories.map((repo) => repo.id));
-    const projects = (parsed.projects || []).filter((item) =>
-      allowed.has(item.id) &&
-      ["Needs attention", "Needs review", "In progress", "Completed", "On hold", "Not assessed"].includes(item.status) &&
-      Number.isInteger(item.priority) && item.priority >= 1 && item.priority <= 5 &&
-      typeof item.reason === "string"
-    );
-    if (projects.length !== repositories.length || new Set(projects.map((item) => item.id)).size !== repositories.length) {
-      return NextResponse.json({ error: "The AI did not return a complete classification for every repository. Please retry." }, { status: 502 });
-    }
-    return NextResponse.json({ projects, model: result.model || activeModel, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+    const order = new Map(repositories.map((repo, index) => [repo.id, index]));
+    projects.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    return NextResponse.json({ projects, model, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "AI organization failed." }, { status: 502 });
   }
