@@ -11,9 +11,10 @@ export async function GET(request: NextRequest) {
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
   const configuredRedirect = process.env.GITHUB_REDIRECT_URI;
   const redirectUri = configuredRedirect || (process.env.NODE_ENV === "production" ? "" : new URL("/api/auth/callback", request.url).toString());
+  const appUrl = redirectUri ? new URL("/", redirectUri) : new URL("/", request.url);
 
   const fail = (reason: string) => {
-    const response = NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(reason)}`, request.url));
+    const response = NextResponse.redirect(new URL(`?auth_error=${encodeURIComponent(reason)}`, appUrl));
     response.cookies.delete(OAUTH_STATE_COOKIE);
     return response;
   };
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     });
     if (!userResponse.ok) return fail("github_profile_failed");
     const user = await userResponse.json() as { login: string; name?: string | null; avatar_url?: string | null };
-    const response = NextResponse.redirect(new URL("/", request.url));
+    const response = NextResponse.redirect(appUrl);
     response.cookies.set(SESSION_COOKIE, sealSession({ accessToken: tokenData.access_token, login: user.login, name: user.name, avatarUrl: user.avatar_url }), {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 8,
     });
