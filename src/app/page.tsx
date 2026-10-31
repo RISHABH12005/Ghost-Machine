@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { openSession, SESSION_COOKIE } from "@/lib/github-session";
 import LoginPage from "@/components/login-page";
 import RepoPilotDashboard from "@/components/repo-pilot-dashboard";
