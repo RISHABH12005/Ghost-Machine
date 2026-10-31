@@ -30,6 +30,70 @@ const navItems = [
   { label: "Priorities", icon: Zap },
 ];
 
+
+function renderInlineMarkdown(value: string): React.ReactNode[] {
+  const pattern = /(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\`[^\`]+\`)/g;
+  const parts = value.split(pattern).filter(Boolean);
+  return parts.map((part, index) => {
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (link) return <a key={index} href={link[2]} target="_blank" rel="noreferrer" className="text-[#79c0ff] underline decoration-[#79c0ff]/40 underline-offset-2 hover:decoration-[#79c0ff]">{link[1]}</a>;
+    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) return <strong key={index} className="font-semibold text-[#f0f6fc]">{part.slice(2,-2)}</strong>;
+    if ((part.startsWith("*") && part.endsWith("*")) || (part.startsWith("_") && part.endsWith("_"))) return <em key={index}>{part.slice(1,-1)}</em>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={index} className="rounded bg-[#30363d] px-1.5 py-0.5 font-mono text-[0.9em] text-[#e6edf3]">{part.slice(1,-1)}</code>;
+    return <Fragment key={index}>{part}</Fragment>;
+  });
+}
+
+function MarkdownContent({ content }: { content: string }) {
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let paragraph: string[] = [];
+  let listItems: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    blocks.push(<p key={`p-${blocks.length}`} className="my-3 leading-7 text-[#d1d9e0]">{renderInlineMarkdown(paragraph.join(" "))}</p>);
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!listItems.length || !listType) return;
+    const items = listItems.map((item, index) => <li key={index} className="pl-1 leading-7 text-[#d1d9e0]">{renderInlineMarkdown(item)}</li>);
+    blocks.push(listType === "ol"
+      ? <ol key={`ol-${blocks.length}`} className="my-3 list-decimal space-y-1 pl-6 marker:text-[#8b949e]">{items}</ol>
+      : <ul key={`ul-${blocks.length}`} className="my-3 list-disc space-y-1 pl-6 marker:text-[#8b949e]">{items}</ul>);
+    listItems = [];
+    listType = null;
+  };
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) { flushParagraph(); flushList(); return; }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph(); flushList();
+      const level = heading[1].length;
+      const className = level === 1 ? "mt-5 mb-2 text-lg font-semibold text-[#f0f6fc]" : level === 2 ? "mt-5 mb-2 text-base font-semibold text-[#f0f6fc]" : "mt-4 mb-1.5 text-sm font-semibold text-[#e6edf3]";
+      blocks.push(level === 1
+        ? <h3 key={`h-${blocks.length}`} className={className}>{renderInlineMarkdown(heading[2])}</h3>
+        : <h4 key={`h-${blocks.length}`} className={className}>{renderInlineMarkdown(heading[2])}</h4>);
+      return;
+    }
+    const unordered = line.match(/^(?:[-*+]\s+)(.+)$/);
+    const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+    const nextType = unordered ? "ul" : ordered ? "ol" : null;
+    if (nextType) {
+      flushParagraph();
+      if (listType && listType !== nextType) flushList();
+      listType = nextType;
+      listItems.push((unordered || ordered)![1]);
+      return;
+    }
+    flushList();
+    paragraph.push(line);
+  });
+  flushParagraph(); flushList();
+  return <div className="break-words text-sm">{blocks}</div>;
+}
+
 function relativeDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Date unavailable";
@@ -421,7 +485,7 @@ export default function RepoPilotDashboard() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2 sm:pl-4"><button type="button" onClick={() => void summarizeRepository(repository)} disabled={summarizingId !== null} className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[#8957e5]/50 bg-[#8957e5]/10 px-2 text-xs text-[#d2a8ff] hover:bg-[#8957e5]/20 disabled:opacity-50">{summarizingId === repository.id ? <LoaderCircle size={12} className="animate-spin" /> : <Sparkles size={12} />}{summarizingId === repository.id ? "Thinking…" : "AI summary"}</button><button type="button" onClick={() => void assessRepository(repository)} disabled={assessingId !== null} className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[#30363d] bg-[#161b22] px-2 text-xs hover:border-[#8b949e] disabled:opacity-50">{assessingId === repository.id ? <LoaderCircle size={12} className="animate-spin" /> : <ShieldAlert size={12} />}{assessingId === repository.id ? "Checking…" : "Assess"}</button><label className="sr-only" htmlFor={`status-${repository.id}`}>Status for {repository.name}</label><select id={`status-${repository.id}`} value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className="min-h-8 max-w-[170px] rounded-md border border-[#30363d] bg-[#161b22] px-2 text-xs text-[#c9d1d9] outline-none focus:border-[#2f81f7]">{STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select><a href={repository.url} target="_blank" rel="noreferrer" aria-label={`Open ${repository.name} on GitHub`} className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><ExternalLink size={15} /></a></div>
-                    {aiSummaries[repository.id] && <div className="mt-3 rounded-md border border-[#8957e5]/40 bg-[#8957e5]/5 p-3 sm:ml-12"><div className="flex items-center justify-between gap-2"><p className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#d2a8ff]"><Sparkles size={13} /> Ollama Cloud analysis</p><span className="text-xs text-[#8b949e]">{aiSummaries[repository.id].model}</span></div>{aiSummaries[repository.id].error ? <p className="mt-2 text-sm text-[#ff7b72]">{aiSummaries[repository.id].error}</p> : <><div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#c9d1d9]">{aiSummaries[repository.id].summary}</div><p className="mt-3 text-xs text-[#8b949e]">Generated {relativeDate(aiSummaries[repository.id].generatedAt)} · Based on GitHub metadata, open issues, pull requests and recent workflow runs. No source files were analyzed.</p></>}</div>}{assessments[repository.id] && <div className="mt-3 rounded-md border border-[#30363d] bg-[#010409] p-3 sm:ml-12"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold text-[#c9d1d9]">Evidence-based assessment · {assessments[repository.id].confidence} confidence</p><p className="text-xs text-[#8b949e]">Checked {relativeDate(assessments[repository.id].assessedAt)}</p></div>{assessments[repository.id].error ? <p className="mt-2 text-sm text-[#ff7b72]">{assessments[repository.id].error}</p> : <><p className="mt-2 text-sm">Suggested status: <span className="font-semibold">{assessments[repository.id].status}</span></p>{assessments[repository.id].evidence.length > 0 ? <ul className="mt-2 space-y-1.5">{assessments[repository.id].evidence.map((item, index) => <li key={index} className="text-xs leading-5 text-[#8b949e]">• {item.url ? <a className="text-[#58a6ff] hover:underline" href={item.url} target="_blank" rel="noreferrer">{item.detail}</a> : item.detail}</li>)}</ul> : <p className="mt-2 text-xs text-[#8b949e]">No evidence was returned. Keep this repository unassessed.</p>}<div className="mt-3 flex flex-wrap items-center gap-3"><button type="button" disabled={assessments[repository.id].status === "Not assessed"} onClick={() => applyAssessment(repository, assessments[repository.id])} className="rounded-md bg-[#238636] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#2ea043] disabled:cursor-not-allowed disabled:opacity-50">Apply suggestion</button><span className="text-xs text-[#8b949e]">Suggestions never change your status until applied.</span></div></>}</div>}
+                    {aiSummaries[repository.id] && <div className="mt-3 rounded-md border border-[#8957e5]/40 bg-[#8957e5]/5 p-3 sm:ml-12"><div className="flex items-center justify-between gap-2"><p className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#d2a8ff]"><Sparkles size={13} /> Ollama Cloud analysis</p><span className="text-xs text-[#8b949e]">{aiSummaries[repository.id].model}</span></div>{aiSummaries[repository.id].error ? <p className="mt-2 text-sm text-[#ff7b72]">{aiSummaries[repository.id].error}</p> : <><div className="mt-2"><MarkdownContent content={aiSummaries[repository.id].summary} /></div><p className="mt-3 text-xs text-[#8b949e]">Generated {relativeDate(aiSummaries[repository.id].generatedAt)} · Based on GitHub metadata, open issues, pull requests and recent workflow runs. No source files were analyzed.</p></>}</div>}{assessments[repository.id] && <div className="mt-3 rounded-md border border-[#30363d] bg-[#010409] p-3 sm:ml-12"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold text-[#c9d1d9]">Evidence-based assessment · {assessments[repository.id].confidence} confidence</p><p className="text-xs text-[#8b949e]">Checked {relativeDate(assessments[repository.id].assessedAt)}</p></div>{assessments[repository.id].error ? <p className="mt-2 text-sm text-[#ff7b72]">{assessments[repository.id].error}</p> : <><p className="mt-2 text-sm">Suggested status: <span className="font-semibold">{assessments[repository.id].status}</span></p>{assessments[repository.id].evidence.length > 0 ? <ul className="mt-2 space-y-1.5">{assessments[repository.id].evidence.map((item, index) => <li key={index} className="text-xs leading-5 text-[#8b949e]">• {item.url ? <a className="text-[#58a6ff] hover:underline" href={item.url} target="_blank" rel="noreferrer">{item.detail}</a> : item.detail}</li>)}</ul> : <p className="mt-2 text-xs text-[#8b949e]">No evidence was returned. Keep this repository unassessed.</p>}<div className="mt-3 flex flex-wrap items-center gap-3"><button type="button" disabled={assessments[repository.id].status === "Not assessed"} onClick={() => applyAssessment(repository, assessments[repository.id])} className="rounded-md bg-[#238636] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#2ea043] disabled:cursor-not-allowed disabled:opacity-50">Apply suggestion</button><span className="text-xs text-[#8b949e]">Suggestions never change your status until applied.</span></div></>}</div>}
                   </div>
                 </article>)}
               </div>
