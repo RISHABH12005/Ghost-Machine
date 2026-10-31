@@ -13,6 +13,7 @@ import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/type
 type AiRepositorySummary = { summary: string; model: string; generatedAt: string; source: string; error?: string };
 type AiProjectSuggestion = { id: number; status: ProjectStatus; priority: number; reason: string };
 type AiOrganization = { projects: AiProjectSuggestion[]; model: string; generatedAt: string };
+type DashboardInsights = { year: number; totalContributions: number; totalCommits: number; totalPullRequests: number; totalIssues: number; days: Array<{ date: string; contributionCount: number; contributionLevel: string }>; activitySeries: Array<{ quarter: string; contributions: number; commits: number; pullRequests: number; issues: number }>; organizations: Array<{ id: string; login: string; name: string; avatarUrl: string; url: string; contributions: number }>; achievements: Array<{ name: string; imageUrl: string }>; achievementsAvailable: boolean; syncedAt: string };
 type RepositoryAssessment = { status: ProjectStatus; confidence: string; assessedAt: string; evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }>; limitations?: string[]; error?: string };
 const STATUS_OPTIONS: ProjectStatus[] = ["Not assessed", "Needs review", "In progress", "Needs attention", "Completed", "On hold"];
 const STATUS_STYLES: Record<ProjectStatus, string> = {
@@ -79,6 +80,11 @@ export default function RepoPilotDashboard() {
   const [totalContributions, setTotalContributions] = useState(0);
   const [contributionError, setContributionError] = useState("");
   const [selectedStatusChart, setSelectedStatusChart] = useState<ProjectStatus | null>(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMetric, setSelectedMetric] = useState<string>("Contributions");
+  const [dashboardInsights, setDashboardInsights] = useState<DashboardInsights | null>(null);
+  const [insightsSyncedAt, setInsightsSyncedAt] = useState("");
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   const navigateTo = (label: string) => {
     const routes: Record<string, string> = {
@@ -280,15 +286,38 @@ export default function RepoPilotDashboard() {
   useEffect(() => {
     if (!githubUser) return;
     let active = true;
-    void fetch("/api/dashboard/insights", { cache: "no-store" })
-      .then(async (response) => {
-        const result = await response.json() as { totalContributions?: number; days?: Array<{ date: string; contributionCount: number; contributionLevel: string }>; error?: string };
-        if (!response.ok) throw new Error(result.error || "Could not load contribution history.");
-        if (active) { setTotalContributions(result.totalContributions || 0); setContributionDays(result.days || []); setContributionError(""); }
-      })
-      .catch((cause) => { if (active) setContributionError(cause instanceof Error ? cause.message : "Contribution history unavailable."); });
-    return () => { active = false; };
-  }, [githubUser]);
+    let inFlight = false;
+    const syncInsights = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      setInsightsLoading(true);
+      try {
+        const response = await fetch(`/api/dashboard/insights?year=${selectedYear}`, { cache: "no-store" });
+        const result = await response.json() as DashboardInsights & { error?: string };
+        if (!response.ok) throw new Error(result.error || "Could not load GitHub analytics.");
+        if (!active) return;
+        setDashboardInsights(result);
+        setTotalContributions(result.totalContributions || 0);
+        setContributionDays(result.days || []);
+        setInsightsSyncedAt(new Date(result.syncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+        setContributionError("");
+      } catch (cause) {
+        if (active) setContributionError(cause instanceof Error ? cause.message : "GitHub analytics unavailable.");
+      } finally {
+        inFlight = false;
+        if (active) setInsightsLoading(false);
+      }
+    };
+    void syncInsights();
+    const interval = window.setInterval(() => void syncInsights(), 60_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [githubUser, selectedYear]);
+
+  useEffect(() => {
+    if (!githubUser) return;
+    const interval = window.setInterval(() => void importRepositories(), 60_000);
+    return () => window.clearInterval(interval);
+  }, [githubUser, importRepositories]);
 
   const toggleSidebar = () => {
     if (window.matchMedia("(min-width: 1024px)").matches) {
@@ -323,64 +352,60 @@ export default function RepoPilotDashboard() {
     "Needs attention": "#f0883e", "Completed": "#3fb950", "On hold": "#d2a8ff",
   };
   const statusTrend = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(start.getDate() - 26 * 7);
-    start.setHours(0, 0, 0, 0);
-    const weeks = Array.from({ length: 27 }, (_, index) => {
-      const date = new Date(start);
-      date.setDate(start.getDate() + index * 7);
-      return date;
-    });
-    const currentStatus = new Map(repositories.map((repo) => [
-      repo.id, organizationMode === "ai" ? aiStatusById.get(repo.id) || repo.status : repo.status,
-    ]));
-    const datedRepositories = repositories.flatMap((repo) => {
-      const dateValue = repo.pushedAt || repo.updatedAt;
-      if (!dateValue) return [];
-      const date = new Date(dateValue);
-      if (Number.isNaN(date.getTime()) || date < start || date > now) return [];
-      return [{ date, status: currentStatus.get(repo.id) || repo.status }];
-    });
+    const yearStart = new Date(selectedYear, 0, 1);
+    const quarters = Array.from({ length: 4 }, (_, index) => new Date(selectedYear, index * 3, 1));
     const series = STATUS_OPTIONS.map((status) => {
-      let running = 0;
-      const points = weeks.map((week, index) => {
-        if (index > 0) {
-          const previous = weeks[index - 1];
-          running += datedRepositories.filter((item) => item.status === status && item.date >= previous && item.date < week).length;
-        }
-        if (index === 0) running += datedRepositories.filter((item) => item.status === status && item.date < week).length;
-        return { date: week, value: running };
+      const points = quarters.map((quarterStart, index) => {
+        const quarterEnd = new Date(selectedYear, index * 3 + 3, 0, 23, 59, 59);
+        const value = repositories.filter((repo) => {
+          const date = new Date(repo.pushedAt || repo.updatedAt);
+          const effectiveStatus = organizationMode === "ai" ? aiStatusById.get(repo.id) || repo.status : repo.status;
+          return effectiveStatus === status && date >= yearStart && date <= quarterEnd;
+        }).length;
+        return { date: quarterStart, value };
       });
       return { status, points };
     });
-    return { weeks, series, totalDated: datedRepositories.length };
-  }, [repositories, organizationMode, aiOrganization]);
+    return { weeks: quarters, series };
+  }, [repositories, organizationMode, aiOrganization, selectedYear]);
   const statusTrendMax = Math.max(1, ...statusTrend.series.flatMap((series) => series.points.map((point) => point.value)));
-  const trendPoint = (index: number, value: number) => ({
-    x: 46 + (index / 26) * 704,
-    y: 190 - (value / statusTrendMax) * 160,
+  const trendPoint = (index: number, value: number, max = statusTrendMax, count = 4) => ({
+    x: 46 + (index / Math.max(1, count - 1)) * 704,
+    y: 190 - (value / max) * 160,
   });
-  const trendPath = (points: Array<{date: Date; value: number}>) => points.map((point, index) => {
-    const p = trendPoint(index, point.value);
+  const trendPath = (points: Array<{date: Date; value: number}>, max = statusTrendMax) => points.map((point, index) => {
+    const p = trendPoint(index, point.value, max, points.length);
     return `${index === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
   }).join(" ");
-  const trendAreaPath = (points: Array<{date: Date; value: number}>) => {
+  const trendAreaPath = (points: Array<{date: Date; value: number}>, max = statusTrendMax) => {
     const line = points.map((point, index) => {
-      const p = trendPoint(index, point.value);
+      const p = trendPoint(index, point.value, max, points.length);
       return `${index === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
     }).join(" ");
     return `${line} L 750 190 L 46 190 Z`;
   };
-  const contributionLine = useMemo(() => {
-    if (contributionDays.length < 2) return "";
-    const max = Math.max(1, ...contributionDays.map((day) => day.contributionCount));
-    return contributionDays.map((day, index) => {
-      const x = 12 + (index / (contributionDays.length - 1)) * 736;
-      const y = 184 - (day.contributionCount / max) * 160;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-  }, [contributionDays]);
+  const metricColors: Record<string, string> = {
+    "Contributions": "#3fb950", "Commits": "#58a6ff", "Pull requests": "#a371f7", "Issues": "#f0883e",
+  };
+  const activityKey: Record<string, "contributions" | "commits" | "pullRequests" | "issues"> = {
+    "Contributions": "contributions", "Commits": "commits", "Pull requests": "pullRequests", "Issues": "issues",
+  };
+  const selectedStatus = STATUS_OPTIONS.includes(selectedMetric as ProjectStatus) ? selectedMetric as ProjectStatus : null;
+  const selectedActivityKey = activityKey[selectedMetric];
+  const selectedStatusSeries = selectedStatus ? statusTrend.series.find((item) => item.status === selectedStatus) : null;
+  const selectedActivityPoints = dashboardInsights?.activitySeries.map((item, index) => ({
+    date: new Date(selectedYear, index * 3, 1), value: item[selectedActivityKey || "contributions"], label: item.quarter,
+  })) || [];
+  const selectedGraphPoints = selectedStatusSeries?.points || selectedActivityPoints;
+  const selectedGraphMax = Math.max(1, ...selectedGraphPoints.map((point) => point.value));
+  const selectedGraphColor = selectedStatus ? statusColors[selectedStatus] : metricColors[selectedMetric] || "#58a6ff";
+  const selectedGraphTotal = selectedStatus
+    ? statusCounts.find((item) => item.status === selectedStatus)?.count || 0
+    : selectedActivityKey === "contributions" ? dashboardInsights?.totalContributions || 0
+    : selectedActivityKey === "commits" ? dashboardInsights?.totalCommits || 0
+    : selectedActivityKey === "pullRequests" ? dashboardInsights?.totalPullRequests || 0
+    : dashboardInsights?.totalIssues || 0;
+
   const isOverviewPage = pathname === "/dashboard" || pathname === "/";
   const isRepositoryPage = ["/repositories", "/work-board", "/priorities"].includes(pathname);
   const isActivityPage = pathname === "/activity";
