@@ -500,42 +500,64 @@ export default function RepoPilotDashboard() {
               </div> : <div className="mt-5 rounded-md border border-dashed border-[#30363d] p-5 text-center text-xs text-[#8b949e]">{contributionError || "Loading GitHub contribution history…"}</div>}
             </div>
             <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div><h2 className="font-semibold">Project status trends</h2><p className="mt-1 text-xs text-[#8b949e]">Stock-market style multi-line view · last 6 months</p></div>
-                <span className="text-xs text-[#8b949e]">{repositories.length} repositories</span>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><h2 className="font-semibold">GitHub and project analytics</h2><p className="mt-1 text-xs text-[#8b949e]">Select any coloured metric to open its yearly area graph.</p></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#8b949e]">Year</span>
+                  <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="rounded-md border border-[#30363d] bg-[#161b22] px-3 py-1.5 text-sm text-[#e6edf3] outline-none focus:border-[#2f81f7]" aria-label="Select analytics year">
+                    {Array.from({ length: new Date().getFullYear() - 2022 }, (_, index) => new Date().getFullYear() - index).map((year) => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                  <span className="text-[11px] text-[#8b949e]">{insightsLoading ? "Syncing…" : insightsSyncedAt ? `Synced ${insightsSyncedAt}` : "Waiting for sync"}</span>
+                </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {statusCounts.map(({status,count}) => <button key={status} type="button" aria-pressed={selectedStatusChart === status} onClick={() => setSelectedStatusChart((current) => current === status ? null : status)} title={`Open ${status} area chart · ${count} repositories currently`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${selectedStatusChart === status ? "border-[#8b949e] bg-[#21262d] text-white" : "border-[#30363d] bg-[#0d1117] text-[#c9d1d9] hover:bg-[#161b22]"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:statusColors[status]}} />{status}<span className="font-semibold tabular-nums">{count}</span></button>)}
+              <div className="mt-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8b949e]">Project status</p>
+                <div className="flex flex-wrap gap-2">
+                  {statusCounts.map(({status,count}) => <button key={status} type="button" aria-pressed={selectedMetric === status} onClick={() => setSelectedMetric(status)} title={`Show ${status} area graph · ${count} repositories`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-colors ${selectedMetric === status ? "border-[#8b949e] bg-[#30363d] text-white" : "border-[#30363d] bg-[#161b22] text-[#c9d1d9] hover:border-[#8b949e]"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:statusColors[status]}}/>{status}<strong className="tabular-nums">{count}</strong></button>)}
+                </div>
               </div>
-              {selectedStatusChart ? (() => {
-                const series = statusTrend.series.find((item) => item.status === selectedStatusChart);
-                if (!series) return null;
-                const latest = series.points[series.points.length - 1]?.value || 0;
-                const first = series.points[0]?.value || 0;
-                const change = latest - first;
-                return <div className="mt-5 rounded-lg border border-[#30363d] bg-[#010409] p-3 sm:p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{backgroundColor:statusColors[selectedStatusChart]}}/><h3 className="font-semibold">{selectedStatusChart}</h3></div><p className="mt-1 text-xs text-[#8b949e]">Separate area chart · last 6 months</p></div>
-                    <div className="text-right"><p className="text-2xl font-semibold tabular-nums">{statusCounts.find((item) => item.status === selectedStatusChart)?.count || 0}</p><p className="text-[11px] text-[#8b949e]">Current repositories</p></div>
-                  </div>
-                  <div className="mt-3 overflow-x-auto">
-                    <svg viewBox="0 0 780 230" role="img" aria-label={`${selectedStatusChart} area chart over the last six months`} className="min-w-[560px] w-full">
-                      {[30,70,110,150,190].map((y,index) => <g key={y}><line x1="46" x2="750" y1={y} y2={y} stroke="#30363d" strokeDasharray="3 5"/><text x="36" y={y+4} textAnchor="end" fill="#8b949e" fontSize="10">{Math.round(statusTrendMax * (4-index) / 4)}</text></g>)}
-                      <path d={trendAreaPath(series.points)} fill={statusColors[selectedStatusChart]} opacity="0.22"/>
-                      <path d={trendPath(series.points)} fill="none" stroke={statusColors[selectedStatusChart]} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      {series.points.map((point,index) => { const p=trendPoint(index,point.value); return <circle key={index} cx={p.x} cy={p.y} r="4" fill={statusColors[selectedStatusChart]} stroke="#010409" strokeWidth="1.5"><title>{selectedStatusChart} · week of {point.date.toLocaleDateString()} · {point.value} repositories</title></circle>; })}
-                      {[0,6,13,19,26].map((index) => <text key={index} x={trendPoint(index,0).x} y="215" textAnchor="middle" fill="#8b949e" fontSize="10">{statusTrend.weeks[index].toLocaleDateString(undefined,{month:"short",day:"numeric"})}</text>)}
-                    </svg>
-                  </div>
-                  <p className="mt-2 text-[11px] leading-5 text-[#8b949e]">Hover over a point to see its week and repository count. Change over the displayed period: {change >= 0 ? "+" : ""}{change}. Historical values are estimates based on repository update dates and current statuses, not recorded past status snapshots.</p>
-                  <button type="button" onClick={() => setSelectedStatusChart(null)} className="mt-3 rounded-md border border-[#30363d] px-3 py-1.5 text-xs text-[#c9d1d9] hover:bg-[#161b22]">Close chart</button>
-                </div>;
-              })() : <p className="mt-4 rounded-md border border-dashed border-[#30363d] p-4 text-center text-xs text-[#8b949e]">Select a status button to open its separate area chart.</p>}
-              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#30363d] pt-4">
-                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Active on GitHub</p><p className="mt-1 text-xl font-semibold text-[#3fb950]">{activeOnGitHubCount}</p><p className="text-[11px] text-[#6e7681]">Pushed in the last 30 days</p></div>
-                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Contribution count</p><p className="mt-1 text-xl font-semibold text-[#79c0ff]">{totalContributions.toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">Last 12 months</p></div>
+              <div className="mt-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8b949e]">GitHub activity</p>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    {name:"Contributions",value:dashboardInsights?.totalContributions || 0},
+                    {name:"Commits",value:dashboardInsights?.totalCommits || 0},
+                    {name:"Pull requests",value:dashboardInsights?.totalPullRequests || 0},
+                    {name:"Issues",value:dashboardInsights?.totalIssues || 0},
+                  ]).map((metric) => <button key={metric.name} type="button" aria-pressed={selectedMetric === metric.name} onClick={() => setSelectedMetric(metric.name)} title={`Show ${metric.name} area graph for ${selectedYear}`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-colors ${selectedMetric === metric.name ? "border-[#8b949e] bg-[#30363d] text-white" : "border-[#30363d] bg-[#161b22] text-[#c9d1d9] hover:border-[#8b949e]"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:metricColors[metric.name]}}/>{metric.name}<strong className="tabular-nums">{metric.value.toLocaleString()}</strong></button>)}
+                </div>
               </div>
-            </div>
+              <div className="mt-5 rounded-lg border border-[#30363d] bg-[#010409] p-3 sm:p-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{backgroundColor:selectedGraphColor}}/><h3 className="font-semibold">{selectedMetric}</h3></div><p className="mt-1 text-xs text-[#8b949e]">{selectedYear} · quarterly activity</p></div>
+                  <div className="text-right"><p className="text-2xl font-semibold tabular-nums">{selectedGraphTotal.toLocaleString()}</p><p className="text-[11px] text-[#8b949e]">{selectedStatus ? "Current repositories" : `Total ${selectedMetric.toLowerCase()}`}</p></div>
+                </div>
+                {selectedGraphPoints.length ? <div className="mt-3 overflow-x-auto">
+                  <svg viewBox="0 0 780 230" role="img" aria-label={`${selectedMetric} area graph for ${selectedYear}`} className="min-w-[560px] w-full">
+                    {[30,70,110,150,190].map((y,index) => <g key={y}><line x1="46" x2="750" y1={y} y2={y} stroke="#30363d" strokeDasharray="3 5"/><text x="36" y={y+4} textAnchor="end" fill="#8b949e" fontSize="10">{Math.round(selectedGraphMax * (4-index) / 4)}</text></g>)}
+                    <path d={trendAreaPath(selectedGraphPoints,selectedGraphMax)} fill={selectedGraphColor} opacity="0.2"/>
+                    <path d={trendPath(selectedGraphPoints,selectedGraphMax)} fill="none" stroke={selectedGraphColor} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    {selectedGraphPoints.map((point,index) => { const p=trendPoint(index,point.value,selectedGraphMax,selectedGraphPoints.length); const label="label" in point ? point.label : `Q${index+1}`; return <g key={index}><circle cx={p.x} cy={p.y} r="5" fill={selectedGraphColor} stroke="#010409" strokeWidth="1.5"><title>{selectedMetric} · {label} · {point.value.toLocaleString()}</title></circle><circle cx={p.x} cy={p.y} r="12" fill="transparent"><title>{selectedMetric} · {label} · {point.value.toLocaleString()}</title></circle></g>; })}
+                    {selectedGraphPoints.map((point,index) => { const p=trendPoint(index,0,selectedGraphMax,selectedGraphPoints.length); return <text key={index} x={p.x} y="215" textAnchor="middle" fill="#8b949e" fontSize="11">{("label" in point ? point.label : `Q${index+1}`)}</text>; })}
+                  </svg>
+                </div> : <p className="mt-5 rounded-md border border-dashed border-[#30363d] p-5 text-center text-xs text-[#8b949e]">{contributionError || "Loading GitHub activity data…"}</p>}
+                <p className="mt-2 text-[11px] leading-5 text-[#8b949e]">Hover over a plotted point to see its quarter and exact value. Status history is grouped by repository update date and current status; it is not a historical status audit.</p>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Total repositories</p><p className="mt-1 text-xl font-semibold text-[#e6edf3]">{repositories.length.toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">Authorized, non-fork repositories</p></div>
+                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Total contributions · {selectedYear}</p><p className="mt-1 text-xl font-semibold text-[#3fb950]">{(dashboardInsights?.totalContributions || 0).toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">GitHub contribution calendar</p></div>
+              </div>
+              <div className="mt-5 border-t border-[#30363d] pt-4">
+                <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Organizations</h3><span className="text-xs text-[#8b949e]">Contributions · {selectedYear}</span></div>
+                {dashboardInsights?.organizations.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {dashboardInsights.organizations.map((org) => <a key={org.id} href={org.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-md border border-[#30363d] bg-[#161b22] p-3 hover:border-[#8b949e]"><img src={org.avatarUrl} alt={`${org.login} logo`} className="h-10 w-10 rounded-md" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{org.name}</span><span className="block text-xs text-[#8b949e]">@{org.login}</span></span><span className="text-right"><strong className="block text-sm tabular-nums">{org.contributions.toLocaleString()}</strong><span className="text-[10px] text-[#8b949e]">contributions</span></span></a>)}
+                </div> : <p className="mt-3 rounded-md border border-dashed border-[#30363d] p-4 text-xs text-[#8b949e]">No active GitHub organization memberships were returned for this account.</p>}
+              </div>
+              <div className="mt-5 border-t border-[#30363d] pt-4">
+                <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">GitHub achievements</h3><a href={`https://github.com/${username}?tab=achievements`} target="_blank" rel="noreferrer" className="text-xs text-[#58a6ff] hover:underline">View on GitHub</a></div>
+                {dashboardInsights?.achievements.length ? <div className="mt-3 flex flex-wrap gap-3">{dashboardInsights.achievements.map((achievement) => <div key={achievement.name} title={achievement.name} className="flex w-24 flex-col items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] p-3"><img src={achievement.imageUrl} alt={achievement.name} className="h-12 w-12 object-contain"/><span className="text-center text-[11px] text-[#c9d1d9]">{achievement.name}</span></div>)}</div> : <p className="mt-3 rounded-md border border-dashed border-[#30363d] p-4 text-xs text-[#8b949e]">GitHub did not expose achievement artwork for this profile. Use “View on GitHub” to see the official achievement page.</p>}
+              </div>
+            </div>>
           </section>}
 
           {isRepositoryPage && <section id="repositories" className="mt-7 scroll-mt-24">
