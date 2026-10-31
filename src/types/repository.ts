@@ -20,6 +20,8 @@ export type Repository = {
   archived: boolean;
   openIssues: number;
   topics: string[];
+  private?: boolean;
+  visibility?: string;
   status: ProjectStatus;
   note: string;
 };
@@ -29,4 +31,7 @@ export type RepositoryImportResponse = {
   count: number;
   repositories: Omit<Repository, "status" | "note">[];
   error?: string;
+  authenticated?: boolean;
+  visibility?: string;
+  rateLimit?: { remaining: string | null; retryAt: string | null };
 };
