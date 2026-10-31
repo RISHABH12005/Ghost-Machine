@@ -4,7 +4,7 @@ import { openSession, SESSION_COOKIE } from "@/lib/github-session";
 export const dynamic = "force-dynamic";
 
 type ContributionDay = { date: string; contributionCount: number; contributionLevel: string };
-type Org = { id: string; login: string; name: string | null; avatar_url: string; html_url: string };
+type Org = { id: number; node_id: string; login: string; name: string | null; avatar_url: string; html_url: string };
 type GraphQLResult = {
   data?: {
     viewer?: {
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     if (!orgResponse.ok && orgResponse.status !== 404) throw new Error("Could not load your GitHub organization memberships.");
     const orgRows = orgResponse.ok ? await orgResponse.json() as Array<{ organization: Org }> : [];
     const organizations = orgRows.map((row) => row.organization).filter(Boolean).map((org) => ({
-      id: org.id, login: org.login, name: org.name || org.login,
+      id: String(org.id), nodeId: org.node_id, login: org.login, name: org.name || org.login,
       avatarUrl: org.avatar_url, url: org.html_url,
     }));
     const collection = analytics.data?.viewer?.contributionsCollection;
@@ -97,10 +97,10 @@ export async function GET(request: NextRequest) {
     if (!collection || !calendar) throw new Error(analytics.errors?.[0]?.message || "GitHub did not return contribution history.");
     const achievementsHtml = profileResponse?.ok ? await profileResponse.text() : "";
     const achievements = extractAchievements(achievementsHtml);
-    let organizationContributions: Array<{ id: string; login: string; name: string; avatarUrl: string; url: string; contributions: number }> = organizations.map((org) => ({ ...org, contributions: 0 }));
+    let organizationContributions: Array<{ id: string; nodeId: string; login: string; name: string; avatarUrl: string; url: string; contributions: number }> = organizations.map((org) => ({ ...org, contributions: 0 }));
     if (organizations.length) {
       const orgFields = organizations.slice(0, 20).map((org, index) =>
-        `org${index}: contributionsCollection(organizationID: "${org.id}", from: "${from.toISOString()}", to: "${to.toISOString()}") { contributionCalendar { totalContributions } }`
+        `org${index}: contributionsCollection(organizationID: "${org.nodeId}", from: "${from.toISOString()}", to: "${to.toISOString()}") { contributionCalendar { totalContributions } }`
       ).join("\n");
       const orgQuery = `query OrganizationContributions { viewer { ${orgFields} } }`;
       try {
