@@ -472,34 +472,6 @@ export default function RepoPilotDashboard() {
 
           {isOverviewPage && <section className="mt-5 grid gap-4">
             <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2"><div><h2 className="font-semibold">Project status overview</h2><p className="mt-1 text-xs text-[#8b949e]">Live distribution of your repository categories</p></div><span className="text-xs text-[#8b949e]">{repositories.length} repositories</span></div>
-              <div className="mt-5 space-y-3">
-                {statusCounts.map(({status,count}) => {
-                  const colors: Record<ProjectStatus,string> = {"Not assessed":"#8b949e","Needs review":"#79c0ff","In progress":"#a371f7","Needs attention":"#f0883e","Completed":"#3fb950","On hold":"#6e7681"};
-                  return <div key={status} className="grid grid-cols-[125px_minmax(0,1fr)_30px] items-center gap-3">
-                    <span className="truncate text-xs text-[#c9d1d9]">{status}</span>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-[#21262d]"><div className="h-full rounded-full transition-all" style={{width:`${count / maxStatusCount * 100}%`,backgroundColor:colors[status]}} /></div>
-                    <span className="text-right text-xs tabular-nums text-[#8b949e]">{count}</span>
-                  </div>;
-                })}
-                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#30363d] pt-4">
-                  <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Active on GitHub</p><p className="mt-1 text-xl font-semibold text-[#3fb950]">{activeOnGitHubCount}</p><p className="text-[11px] text-[#6e7681]">Pushed in the last 30 days</p></div>
-                  <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Contributions · last year</p><p className="mt-1 text-xl font-semibold text-[#79c0ff]">{totalContributions.toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">GitHub contribution calendar</p></div>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold">GitHub contribution trend</h2><p className="mt-1 text-xs text-[#8b949e]">Daily contributions across the last year</p></div><span className="text-sm font-semibold text-[#e6edf3]">{totalContributions.toLocaleString()} total</span></div>
-              {contributionDays.length > 1 ? <div className="mt-4">
-                <svg viewBox="0 0 760 220" role="img" aria-label="Line graph of daily GitHub contributions over the last year" className="h-auto w-full overflow-visible">
-                  {[24,64,104,144,184].map((y) => <line key={y} x1="12" x2="748" y1={y} y2={y} stroke="#30363d" strokeDasharray="4 5" />)}
-                  <polyline points={contributionLine} fill="none" stroke="#58a6ff" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                  <polygon points={`12,184 ${contributionLine} 748,184`} fill="#1f6feb" opacity="0.12" />
-                </svg>
-                <div className="flex justify-between text-[11px] text-[#8b949e]"><span>{contributionDays[0]?.date}</span><span>{contributionDays[Math.floor(contributionDays.length / 2)]?.date}</span><span>{contributionDays[contributionDays.length - 1]?.date}</span></div>
-              </div> : <div className="mt-5 rounded-md border border-dashed border-[#30363d] p-5 text-center text-xs text-[#8b949e]">{contributionError || "Loading GitHub contribution history…"}</div>}
-            </div>
-            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div><h2 className="font-semibold">GitHub and project analytics</h2><p className="mt-1 text-xs text-[#8b949e]">Select any coloured metric to open its yearly area graph.</p></div>
                 <div className="flex items-center gap-2">
@@ -557,7 +529,7 @@ export default function RepoPilotDashboard() {
                 <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">GitHub achievements</h3><a href={`https://github.com/${username}?tab=achievements`} target="_blank" rel="noreferrer" className="text-xs text-[#58a6ff] hover:underline">View on GitHub</a></div>
                 {dashboardInsights?.achievements.length ? <div className="mt-3 flex flex-wrap gap-3">{dashboardInsights.achievements.map((achievement) => <div key={achievement.name} title={achievement.name} className="flex w-24 flex-col items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] p-3"><img src={achievement.imageUrl} alt={achievement.name} className="h-12 w-12 object-contain"/><span className="text-center text-[11px] text-[#c9d1d9]">{achievement.name}</span></div>)}</div> : <p className="mt-3 rounded-md border border-dashed border-[#30363d] p-4 text-xs text-[#8b949e]">GitHub did not expose achievement artwork for this profile. Use “View on GitHub” to see the official achievement page.</p>}
               </div>
-            </div>>
+            </div>
           </section>}
 
           {isRepositoryPage && <section id="repositories" className="mt-7 scroll-mt-24">
