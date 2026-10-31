@@ -374,6 +374,11 @@ export default function RepoPilotDashboard() {
   const isRepositoryPage = isOverviewPage || ["/repositories", "/work-board", "/priorities"].includes(pathname);
   const isActivityPage = pathname === "/activity";
   const isSettingsPage = pathname === "/settings";
+  const monthlyContributionTotals = Array.from({ length: 12 }, (_, month) => {
+    const days = contributionCalendar?.weeks.flatMap((week) => week.contributionDays) || [];
+    return days.filter((day) => new Date(day.date + "T00:00:00Z").getUTCMonth() === month).reduce((total, day) => total + day.contributionCount, 0);
+  });
+  const peakMonthlyContributions = Math.max(1, ...monthlyContributionTotals);
 
   useEffect(() => {
     if (!githubUser || !isOverviewPage) return;
@@ -461,7 +466,7 @@ export default function RepoPilotDashboard() {
             </div>
             {contributionError ? <p role="alert" className="mt-4 rounded-md border border-[#da3633]/40 bg-[#da3633]/10 p-3 text-sm text-[#ff7b72]">{contributionError}</p> : contributionCalendar ? <div className="mt-4 overflow-x-auto pb-2">
               <div className="min-w-[720px]">
-                <div className="mb-2 grid gap-[3px] text-[11px] text-[#8b949e]" style={{ gridTemplateColumns: `repeat(${contributionCalendar.weeks.length}, minmax(0, 1fr))` }}>
+                <div className="mb-2 grid w-max gap-[3px] text-[11px] text-[#8b949e]" style={{ gridTemplateColumns: `repeat(${contributionCalendar.weeks.length}, minmax(0, 1fr))` }}>
                   {contributionCalendar.weeks.map((week, index) => {
                     const firstDay = week.contributionDays[0];
                     const previous = index > 0 ? contributionCalendar.weeks[index - 1].contributionDays[0] : null;
@@ -469,7 +474,7 @@ export default function RepoPilotDashboard() {
                     return <span key={index} className="whitespace-nowrap">{showMonth ? new Date(firstDay.date).toLocaleDateString("en", { month: "short", timeZone: "UTC" }) : ""}</span>;
                   })}
                 </div>
-                <div className="grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${contributionCalendar.weeks.length}, minmax(0, 1fr))`, gridTemplateRows: "repeat(7, 12px)", gridAutoFlow: "column" }}>
+                <div className="grid w-max gap-[3px]" style={{ gridTemplateColumns: `repeat(${contributionCalendar.weeks.length}, minmax(0, 1fr))`, gridTemplateRows: "repeat(7, 12px)", gridAutoFlow: "column" }}>
                   {contributionCalendar.weeks.flatMap((week, weekIndex) => week.contributionDays.map((day) => {
                     const colors: Record<string, string> = {
                       NONE: "bg-[#161b22] border-[#30363d]",
@@ -485,7 +490,26 @@ export default function RepoPilotDashboard() {
                 <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-[#8b949e]"><span>Less</span><span className="h-3 w-3 rounded-[2px] bg-[#161b22] border border-[#30363d]" /><span className="h-3 w-3 rounded-[2px] bg-[#0e4429]" /><span className="h-3 w-3 rounded-[2px] bg-[#006d32]" /><span className="h-3 w-3 rounded-[2px] bg-[#26a641]" /><span className="h-3 w-3 rounded-[2px] bg-[#39d353]" /><span>More</span></div>
               </div>
             </div> : <p className="mt-4 text-sm text-[#8b949e]">{contributionLoading ? "Fetching your real GitHub contribution data…" : "Contribution history will appear here."}</p>}
-            <p className="mt-2 text-[11px] text-[#6e7681]">Live from GitHub's contribution calendar. Hover over any day to see its exact contribution count and date.</p>
+            <div className="mt-6 border-t border-[#30363d] pt-5">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div><h3 className="text-sm font-semibold text-[#e6edf3]">Monthly activity</h3><p className="mt-1 text-xs text-[#8b949e]">Contribution totals by month · hover a bar for the exact count</p></div>
+                <span className="text-xs text-[#8b949e]">Peak: {Math.max(...monthlyContributionTotals).toLocaleString()}</span>
+              </div>
+              <div className="mt-4 grid grid-cols-6 gap-3 sm:grid-cols-12">
+                {monthlyContributionTotals.map((total, month) => {
+                  const monthName = new Date(Date.UTC(contributionYear, month, 1)).toLocaleDateString("en", { month: "short", timeZone: "UTC" });
+                  const height = total === 0 ? 3 : Math.max(8, Math.round((total / peakMonthlyContributions) * 112));
+                  return <div key={month} className="group flex min-w-0 flex-col items-center gap-2">
+                    <div className="flex h-28 w-full items-end justify-center rounded-t bg-[#161b22]/70 px-1">
+                      <div title={monthName + " " + contributionYear + ": " + total.toLocaleString() + " contributions"} aria-label={monthName + ": " + total + " contributions"} className="w-full max-w-8 rounded-t-sm bg-gradient-to-t from-[#0e4429] to-[#39d353] opacity-90 transition-all duration-200 group-hover:opacity-100 group-hover:brightness-125" style={{ height: height + "px" }} />
+                    </div>
+                    <span className="text-[11px] text-[#8b949e]">{monthName}</span>
+                    <span className="text-[10px] tabular-nums text-[#6e7681]">{total.toLocaleString()}</span>
+                  </div>;
+                })}
+              </div>
+            </div>
+            <p className="mt-4 text-[11px] text-[#6e7681]">Live from GitHub contribution data. Hover over a day or bar for exact values.</p>
           </section>}
 
           {isOverviewPage && <section className="mt-5 rounded-lg border border-[#30363d] bg-[#0d1117] p-5">
