@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const authorize = new URL("https://github.com/login/oauth/authorize");
   authorize.searchParams.set("client_id", clientId);
   authorize.searchParams.set("redirect_uri", redirectUri);
-  authorize.searchParams.set("scope", "read:user repo");
+  authorize.searchParams.set("scope", "read:user repo read:org");
   authorize.searchParams.set("state", state);
   const response = NextResponse.redirect(authorize);
   response.cookies.set(OAUTH_STATE_COOKIE, state, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 600 });
