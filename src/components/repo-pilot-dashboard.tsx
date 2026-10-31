@@ -294,7 +294,11 @@ export default function RepoPilotDashboard() {
   const attentionCount = repositories.filter((repo) => repo.status === "Needs attention").length;
   const inProgressCount = repositories.filter((repo) => repo.status === "In progress").length;
   const completedCount = repositories.filter((repo) => repo.status === "Completed").length;
-  const statusCounts = STATUS_OPTIONS.map((status) => ({ status, count: repositories.filter((repo) => repo.status === status).length }));
+  const aiStatusById = new Map(aiOrganization?.projects.map((item) => [item.id, item.status]) || []);
+  const statusCounts = STATUS_OPTIONS.map((status) => ({
+    status,
+    count: repositories.filter((repo) => (organizationMode === "ai" ? aiStatusById.get(repo.id) || repo.status : repo.status) === status).length,
+  }));
   const activeOnGitHubCount = repositories.filter((repo) => repo.pushedAt && Date.now() - new Date(repo.pushedAt).getTime() <= 30 * 86_400_000).length;
   const maxStatusCount = Math.max(1, ...statusCounts.map((item) => item.count));
 
@@ -304,24 +308,24 @@ export default function RepoPilotDashboard() {
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-[#30363d] bg-[#0d1117] px-3 py-4 transition-all lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} ${sidebarCollapsed ? "lg:w-[76px]" : "lg:w-[260px]"}`}>
         <div className={`flex items-center gap-2 px-2 pb-4 ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f0f6fc] text-[#0d1117]"><Github size={22} /></div>
-          {!sidebarCollapsed && <div className="min-w-0"><p className="text-sm font-semibold text-[#f0f6fc]">RepoPilot</p><p className="text-xs text-[#8b949e]">Your repository workspace</p></div>}
+          {(!sidebarCollapsed || mobileMenuOpen) && <div className="min-w-0"><p className="text-sm font-semibold text-[#f0f6fc]">RepoPilot</p><p className="text-xs text-[#8b949e]">Your repository workspace</p></div>}
           <button className="ml-auto rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
         </div>
         <div className="border-b border-[#30363d] px-2 pb-4">
           <a href={`https://github.com/${username}`} target="_blank" rel="noreferrer" title="View GitHub profile" className={`flex items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 py-2 text-sm hover:border-[#8b949e] ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#30363d] text-[10px] font-semibold">{username.slice(0,2).toUpperCase()}</span>
-            {!sidebarCollapsed && <><span className="min-w-0 flex-1 truncate">{username}</span><ExternalLink size={13} className="text-[#8b949e]" /></>}
+            {(!sidebarCollapsed || mobileMenuOpen) && <><span className="min-w-0 flex-1 truncate">{username}</span><ExternalLink size={13} className="text-[#8b949e]" /></>}
           </a>
-          {!sidebarCollapsed && <a href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 px-1 text-xs text-[#8b949e] hover:text-[#58a6ff]"><FolderGit2 size={13}/> Browse all GitHub repositories <ExternalLink size={11}/></a>}
+          {(!sidebarCollapsed || mobileMenuOpen) && <a href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 px-1 text-xs text-[#8b949e] hover:text-[#58a6ff]"><FolderGit2 size={13}/> Browse all GitHub repositories <ExternalLink size={11}/></a>}
         </div>
-        {!sidebarCollapsed && <div className="mt-5 px-2 text-xs font-semibold text-[#8b949e]">Workspace</div>}
+        {(!sidebarCollapsed || mobileMenuOpen) && <div className="mt-5 px-2 text-xs font-semibold text-[#8b949e]">Workspace</div>}
         <nav className="mt-2 space-y-1">
-          {navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{!sidebarCollapsed && label}{label === "Priorities" && attentionCount > 0 && <span className={`rounded-full bg-[#d29922]/15 px-2 py-0.5 text-xs text-[#e3b341] ${sidebarCollapsed ? "lg:ml-0 ml-auto" : "ml-auto"}`}>{attentionCount}</span>}</button>)}
+          {navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{(!sidebarCollapsed || mobileMenuOpen) && label}{label === "Priorities" && attentionCount > 0 && <span className={`rounded-full bg-[#d29922]/15 px-2 py-0.5 text-xs text-[#e3b341] ${sidebarCollapsed ? "lg:ml-0 ml-auto" : "ml-auto"}`}>{attentionCount}</span>}</button>)}
         </nav>
-        {!sidebarCollapsed && <div className="mt-6 px-2 text-xs font-semibold text-[#8b949e]">Personal</div>}
+        {(!sidebarCollapsed || mobileMenuOpen) && <div className="mt-6 px-2 text-xs font-semibold text-[#8b949e]">Personal</div>}
         <nav className="mt-2 space-y-1">
-          <button onClick={() => navigateTo("Activity history")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Activity history"><Activity size={16} className="text-[#8b949e]" />{!sidebarCollapsed && "Activity history"}</button>
-          <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Settings"><Settings2 size={16} className="text-[#8b949e]" />{!sidebarCollapsed && "Settings"}</button>
+          <button onClick={() => navigateTo("Activity history")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Activity history"><Activity size={16} className="text-[#8b949e]" />{(!sidebarCollapsed || mobileMenuOpen) && "Activity history"}</button>
+          <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Settings"><Settings2 size={16} className="text-[#8b949e]" />{(!sidebarCollapsed || mobileMenuOpen) && "Settings"}</button>
         </nav>
       </aside>
 
