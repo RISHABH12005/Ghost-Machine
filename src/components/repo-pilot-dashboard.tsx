@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
@@ -50,6 +51,8 @@ function Stat({ label, value, icon: Icon }: { label: string; value: number; icon
 }
 
 export default function RepoPilotDashboard() {
+  const pathname = usePathname();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All projects");
   const [username, setUsername] = useState("");
@@ -77,15 +80,28 @@ export default function RepoPilotDashboard() {
   const [contributionError, setContributionError] = useState("");
 
   const navigateTo = (label: string) => {
-    setActiveNav(label);
+    const routes: Record<string, string> = {
+      "Overview": "/dashboard",
+      "Repositories": "/repositories",
+      "Work board": "/work-board",
+      "Priorities": "/priorities",
+      "Activity history": "/activity",
+      "Settings": "/settings",
+    };
     setMobileMenuOpen(false);
-    if (label === "Overview") { setFilter("All projects"); setQuery(""); window.scrollTo({ top: 0, behavior: "smooth" }); }
-    else if (label === "Repositories") { setFilter("All projects"); document.getElementById("repositories")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    else if (label === "Work board") { setFilter("In progress"); document.getElementById("repositories")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    else if (label === "Priorities") { setFilter("Needs attention"); document.getElementById("repositories")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    else if (label === "Activity history") setActivePanel("activity");
-    else if (label === "Settings") setActivePanel("settings");
+    router.push(routes[label] || "/dashboard");
   };
+
+  useEffect(() => {
+    const page = pathname === "/repositories" ? "Repositories"
+      : pathname === "/work-board" ? "Work board"
+      : pathname === "/priorities" ? "Priorities"
+      : pathname === "/activity" ? "Activity history"
+      : pathname === "/settings" ? "Settings" : "Overview";
+    setActiveNav(page);
+    setFilter(page === "Work board" ? "In progress" : page === "Priorities" ? "Needs attention" : "All projects");
+    if (page === "Overview") setQuery("");
+  }, [pathname]);
 
   const importRepositories = useCallback(async () => {
     setLoading(true);
@@ -301,6 +317,19 @@ export default function RepoPilotDashboard() {
   }));
   const activeOnGitHubCount = repositories.filter((repo) => repo.pushedAt && Date.now() - new Date(repo.pushedAt).getTime() <= 30 * 86_400_000).length;
   const maxStatusCount = Math.max(1, ...statusCounts.map((item) => item.count));
+  const contributionLine = useMemo(() => {
+    if (contributionDays.length < 2) return "";
+    const max = Math.max(1, ...contributionDays.map((day) => day.contributionCount));
+    return contributionDays.map((day, index) => {
+      const x = 12 + (index / (contributionDays.length - 1)) * 736;
+      const y = 184 - (day.contributionCount / max) * 160;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+  }, [contributionDays]);
+  const isOverviewPage = pathname === "/dashboard" || pathname === "/";
+  const isRepositoryPage = ["/repositories", "/work-board", "/priorities"].includes(pathname);
+  const isActivityPage = pathname === "/activity";
+  const isSettingsPage = pathname === "/settings";
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
@@ -360,7 +389,7 @@ export default function RepoPilotDashboard() {
 
           {error && <div role="alert" className="mt-4 flex items-start gap-2 rounded-md border border-[#da3633]/50 bg-[#da3633]/10 p-3 text-sm text-[#ff7b72]"><AlertCircle size={17} className="mt-0.5 shrink-0" /><div className="flex-1">{error}</div><button onClick={() => void importRepositories()} className="font-medium underline underline-offset-4">Retry</button></div>}
 
-          <section className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-[#30363d] bg-[#0d1117] px-4 py-3">
+          {isOverviewPage && <section className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-[#30363d] bg-[#0d1117] px-4 py-3">
             <Stat label="Repositories" value={repositories.length} icon={FolderGit2} />
             <span className="hidden h-5 border-l border-[#30363d] sm:block" />
             <Stat label="In progress" value={inProgressCount} icon={GitBranch} />
@@ -369,9 +398,9 @@ export default function RepoPilotDashboard() {
             <span className="hidden h-5 border-l border-[#30363d] sm:block" />
             <Stat label="Completed" value={completedCount} icon={Check} />
             <span className="ml-auto hidden text-xs text-[#8b949e] lg:inline">{lastSynced ? `Last synced at ${lastSynced}` : "Waiting for import"}</span>
-          </section>
+          </section>}
 
-          <section className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.9fr)]">
+          {isOverviewPage && <section className="mt-5 grid gap-4">
             <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
               <div className="flex flex-wrap items-start justify-between gap-2"><div><h2 className="font-semibold">Project status overview</h2><p className="mt-1 text-xs text-[#8b949e]">Live distribution of your repository categories</p></div><span className="text-xs text-[#8b949e]">{repositories.length} repositories</span></div>
               <div className="mt-5 space-y-3">
@@ -390,17 +419,32 @@ export default function RepoPilotDashboard() {
               </div>
             </div>
             <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
-              <div className="flex items-center justify-between gap-2"><div><h2 className="font-semibold">GitHub contributions</h2><p className="mt-1 text-xs text-[#8b949e]">Daily activity over the last 12 months</p></div><span className="text-sm font-semibold text-[#e6edf3]">{totalContributions.toLocaleString()}</span></div>
-              {contributionDays.length ? <div className="mt-5 overflow-x-auto pb-2"><div className="grid w-max grid-flow-col grid-rows-7 gap-[3px]">
-                {contributionDays.map((day) => {
-                  const shades: Record<string,string> = { NONE:"#161b22", FIRST_QUARTILE:"#0e4429", SECOND_QUARTILE:"#006d32", THIRD_QUARTILE:"#26a641", FOURTH_QUARTILE:"#39d353" };
-                  return <span key={day.date} title={`${day.contributionCount} contributions on ${day.date}`} className="h-[10px] w-[10px] rounded-[2px]" style={{backgroundColor:shades[day.contributionLevel] || (day.contributionCount ? "#26a641" : "#161b22")}} />;
-                })}
-              </div><div className="mt-3 flex items-center justify-between text-[10px] text-[#8b949e]"><span>Less</span><div className="flex gap-1">{["#161b22","#0e4429","#006d32","#26a641","#39d353"].map((color) => <span key={color} className="h-2.5 w-2.5 rounded-[2px]" style={{backgroundColor:color}} />)}</div><span>More</span></div></div> : <div className="mt-5 rounded-md border border-dashed border-[#30363d] p-5 text-center text-xs text-[#8b949e]">{contributionError || "Loading GitHub contribution history…"}</div>}
+              <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold">GitHub contribution trend</h2><p className="mt-1 text-xs text-[#8b949e]">Daily contributions across the last year</p></div><span className="text-sm font-semibold text-[#e6edf3]">{totalContributions.toLocaleString()} total</span></div>
+              {contributionDays.length > 1 ? <div className="mt-4">
+                <svg viewBox="0 0 760 220" role="img" aria-label="Line graph of daily GitHub contributions over the last year" className="h-auto w-full overflow-visible">
+                  {[24,64,104,144,184].map((y) => <line key={y} x1="12" x2="748" y1={y} y2={y} stroke="#30363d" strokeDasharray="4 5" />)}
+                  <polyline points={contributionLine} fill="none" stroke="#58a6ff" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                  <polygon points={`12,184 ${contributionLine} 748,184`} fill="#1f6feb" opacity="0.12" />
+                </svg>
+                <div className="flex justify-between text-[11px] text-[#8b949e]"><span>{contributionDays[0]?.date}</span><span>{contributionDays[Math.floor(contributionDays.length / 2)]?.date}</span><span>{contributionDays[contributionDays.length - 1]?.date}</span></div>
+              </div> : <div className="mt-5 rounded-md border border-dashed border-[#30363d] p-5 text-center text-xs text-[#8b949e]">{contributionError || "Loading GitHub contribution history…"}</div>}
             </div>
-          </section>
+            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
+              <div className="flex items-center justify-between gap-2"><div><h2 className="font-semibold">Project status distribution</h2><p className="mt-1 text-xs text-[#8b949e]">Repository count by current status</p></div><span className="text-xs text-[#8b949e]">{repositories.length} repositories</span></div>
+              <div className="mt-5 space-y-3">
+                {statusCounts.map(({status,count}) => {
+                  const colors: Record<ProjectStatus,string> = {"Not assessed":"#8b949e","Needs review":"#79c0ff","In progress":"#a371f7","Needs attention":"#f0883e","Completed":"#3fb950","On hold":"#6e7681"};
+                  return <div key={status} className="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2"><span className="truncate text-xs text-[#c9d1d9]">{status}</span><div className="h-2 overflow-hidden rounded-full bg-[#21262d]"><div className="h-full rounded-full" style={{width:`${count / maxStatusCount * 100}%`,backgroundColor:colors[status]}} /></div><span className="text-right text-xs text-[#8b949e]">{count}</span></div>;
+                })}
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3 border-t border-[#30363d] pt-4">
+                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Active on GitHub</p><p className="mt-1 text-xl font-semibold text-[#3fb950]">{activeOnGitHubCount}</p><p className="text-[11px] text-[#6e7681]">Pushed in the last 30 days</p></div>
+                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Contribution count</p><p className="mt-1 text-xl font-semibold text-[#79c0ff]">{totalContributions.toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">Last 12 months</p></div>
+              </div>
+            </div>
+          </section>}
 
-          <section id="repositories" className="mt-7 scroll-mt-24">
+          {isRepositoryPage && <section id="repositories" className="mt-7 scroll-mt-24">
             <div className="flex flex-col justify-between gap-3 border-b border-[#30363d] pb-4 sm:flex-row sm:items-center">
               <div><h2 className="text-lg font-semibold">Repositories <span className="ml-1 rounded-full bg-[#21262d] px-2 py-0.5 text-sm font-normal text-[#8b949e]">{filteredRepositories.length}</span></h2><p className="mt-1 text-xs text-[#8b949e]">{githubUser ? "Authorized repositories for " : "Public repositories from "}<a className="text-[#58a6ff] hover:underline" href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer">@{username}</a>{lastSynced ? ` · synced ${lastSynced}` : ""}</p></div>
             </div>
@@ -449,7 +493,19 @@ export default function RepoPilotDashboard() {
                 </article>)}
               </div>
             ) : <div className="mt-4 rounded-md border border-dashed border-[#30363d] px-6 py-14 text-center"><Search size={23} className="mx-auto text-[#6e7681]" /><h3 className="mt-3 font-semibold">{repositories.length ? "No matching repositories" : "No repositories imported yet"}</h3><p className="mt-1 text-sm text-[#8b949e]">{repositories.length ? "Try another search term or clear the status filter." : githubUser ? "No repositories were returned for this GitHub account." : "Sign in with GitHub above. RepoPilot will automatically load the repositories your account can access."}</p>{repositories.length > 0 && <button onClick={() => { setQuery(""); setFilter("All projects"); }} className="mt-4 rounded-md border border-[#30363d] px-3 py-1.5 text-sm hover:bg-[#21262d]">Clear filters</button>}</div>}
-          </section>
+          </section>}
+
+          {isActivityPage && <section className="mt-7 rounded-lg border border-[#30363d] bg-[#0d1117] p-5">
+            <h1 className="text-2xl font-semibold">Activity history</h1><p className="mt-2 text-sm text-[#8b949e]">A record of project status changes and applied AI recommendations.</p>
+            {activity.length ? <ol className="mt-6 space-y-4">{activity.map((item) => <li key={item.id} className="border-l-2 border-[#30363d] pl-4"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="mt-6 rounded-md border border-dashed border-[#30363d] p-6 text-sm text-[#8b949e]">No activity has been recorded in this browser session yet.</p>}
+          </section>}
+
+          {isSettingsPage && <section className="mt-7 max-w-3xl space-y-4">
+            <div><h1 className="text-2xl font-semibold">Settings</h1><p className="mt-2 text-sm text-[#8b949e]">Manage your connected account and local workspace preferences.</p></div>
+            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4"><h2 className="font-medium">GitHub account</h2><p className="mt-2 text-sm text-[#8b949e]">{githubUser ? `Connected as @${githubUser.login}` : "Not connected"}</p><a href={githubUser ? `https://github.com/${githubUser.login}` : "/api/auth/github"} target={githubUser ? "_blank" : undefined} rel={githubUser ? "noreferrer" : undefined} className="mt-3 inline-flex rounded-md border border-[#30363d] px-3 py-2 text-sm hover:bg-[#161b22]">{githubUser ? "Open GitHub profile" : "Connect GitHub"}</a></div>
+            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4"><h2 className="font-medium">Saved project statuses</h2><p className="mt-2 text-sm text-[#8b949e]">Reset locally saved statuses for @{username}.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Not assessed" }))); }} className="mt-3 rounded-md border border-[#da3633]/60 px-3 py-2 text-sm text-[#ff7b72] hover:bg-[#da3633]/10">Reset saved statuses</button></div>
+          </section>}
+
           <footer className="mt-10 flex flex-col gap-2 border-t border-[#30363d] py-5 text-xs text-[#8b949e] sm:flex-row sm:items-center sm:justify-between"><span>RepoPilot · Ghost-Machine</span><span className="inline-flex items-center gap-1.5"><BookOpen size={13} />{lastSynced ? "GitHub repositories synchronized" : "Waiting for repository import"}</span></footer>
         </div>
       </main>
