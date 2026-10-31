@@ -61,7 +61,9 @@ export default function RepoPilotDashboard() {
   const [activity, setActivity] = useState<Array<{ id: string; message: string; time: string }>>([]);
   const [assessments, setAssessments] = useState<Record<number, RepositoryAssessment>>({});
   const [assessingId, setAssessingId] = useState<number | null>(null);
-  const [githubUser, setGithubUser] = useState<{ login: string; avatarUrl?: string | null } | null>(null);\n  const [aiSummaries, setAiSummaries] = useState<Record<number, AiRepositorySummary>>({});\n  const [summarizingId, setSummarizingId] = useState<number | null>(null);
+  const [githubUser, setGithubUser] = useState<{ login: string; avatarUrl?: string | null } | null>(null);
+  const [aiSummaries, setAiSummaries] = useState<Record<number, AiRepositorySummary>>({});
+  const [summarizingId, setSummarizingId] = useState<number | null>(null);
 
   const navigateTo = (label: string) => {
     setActiveNav(label);
