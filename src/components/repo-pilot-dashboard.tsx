@@ -78,6 +78,7 @@ export default function RepoPilotDashboard() {
   const [contributionDays, setContributionDays] = useState<Array<{ date: string; contributionCount: number; contributionLevel: string }>>([]);
   const [totalContributions, setTotalContributions] = useState(0);
   const [contributionError, setContributionError] = useState("");
+  const [visibleStatusSeries, setVisibleStatusSeries] = useState<ProjectStatus[]>(STATUS_OPTIONS);
 
   const navigateTo = (label: string) => {
     const routes: Record<string, string> = {
@@ -317,6 +318,53 @@ export default function RepoPilotDashboard() {
   }));
   const activeOnGitHubCount = repositories.filter((repo) => repo.pushedAt && Date.now() - new Date(repo.pushedAt).getTime() <= 30 * 86_400_000).length;
   const maxStatusCount = Math.max(1, ...statusCounts.map((item) => item.count));
+  const statusColors: Record<ProjectStatus, string> = {
+    "Not assessed": "#8b949e", "Needs review": "#79c0ff", "In progress": "#a371f7",
+    "Needs attention": "#f0883e", "Completed": "#3fb950", "On hold": "#d2a8ff",
+  };
+  const statusTrend = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(start.getDate() - 26 * 7);
+    start.setHours(0, 0, 0, 0);
+    const weeks = Array.from({ length: 27 }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index * 7);
+      return date;
+    });
+    const currentStatus = new Map(repositories.map((repo) => [
+      repo.id, organizationMode === "ai" ? aiStatusById.get(repo.id) || repo.status : repo.status,
+    ]));
+    const datedRepositories = repositories.flatMap((repo) => {
+      const dateValue = repo.pushedAt || repo.updatedAt;
+      if (!dateValue) return [];
+      const date = new Date(dateValue);
+      if (Number.isNaN(date.getTime()) || date < start || date > now) return [];
+      return [{ date, status: currentStatus.get(repo.id) || repo.status }];
+    });
+    const series = STATUS_OPTIONS.map((status) => {
+      let running = 0;
+      const points = weeks.map((week, index) => {
+        if (index > 0) {
+          const previous = weeks[index - 1];
+          running += datedRepositories.filter((item) => item.status === status && item.date >= previous && item.date < week).length;
+        }
+        if (index === 0) running += datedRepositories.filter((item) => item.status === status && item.date < week).length;
+        return { date: week, value: running };
+      });
+      return { status, points };
+    });
+    return { weeks, series, totalDated: datedRepositories.length };
+  }, [repositories, organizationMode, aiOrganization]);
+  const statusTrendMax = Math.max(1, ...statusTrend.series.flatMap((series) => series.points.map((point) => point.value)));
+  const trendPoint = (index: number, value: number) => ({
+    x: 46 + (index / 26) * 704,
+    y: 190 - (value / statusTrendMax) * 160,
+  });
+  const trendPath = (points: Array<{date: Date; value: number}>) => points.map((point, index) => {
+    const p = trendPoint(index, point.value);
+    return `${index === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+  }).join(" ");
   const contributionLine = useMemo(() => {
     if (contributionDays.length < 2) return "";
     const max = Math.max(1, ...contributionDays.map((day) => day.contributionCount));
@@ -420,14 +468,25 @@ export default function RepoPilotDashboard() {
               </div> : <div className="mt-5 rounded-md border border-dashed border-[#30363d] p-5 text-center text-xs text-[#8b949e]">{contributionError || "Loading GitHub contribution history…"}</div>}
             </div>
             <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
-              <div className="flex items-center justify-between gap-2"><div><h2 className="font-semibold">Project status distribution</h2><p className="mt-1 text-xs text-[#8b949e]">Repository count by current status</p></div><span className="text-xs text-[#8b949e]">{repositories.length} repositories</span></div>
-              <div className="mt-5 space-y-3">
-                {statusCounts.map(({status,count}) => {
-                  const colors: Record<ProjectStatus,string> = {"Not assessed":"#8b949e","Needs review":"#79c0ff","In progress":"#a371f7","Needs attention":"#f0883e","Completed":"#3fb950","On hold":"#6e7681"};
-                  return <div key={status} className="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2"><span className="truncate text-xs text-[#c9d1d9]">{status}</span><div className="h-2 overflow-hidden rounded-full bg-[#21262d]"><div className="h-full rounded-full" style={{width:`${count / maxStatusCount * 100}%`,backgroundColor:colors[status]}} /></div><span className="text-right text-xs text-[#8b949e]">{count}</span></div>;
-                })}
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div><h2 className="font-semibold">Project status trends</h2><p className="mt-1 text-xs text-[#8b949e]">Stock-market style multi-line view · last 6 months</p></div>
+                <span className="text-xs text-[#8b949e]">{repositories.length} repositories</span>
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-3 border-t border-[#30363d] pt-4">
+              <div className="mt-3 flex flex-wrap gap-2">
+                {statusCounts.map(({status,count}) => <button key={status} type="button" aria-pressed={visibleStatusSeries.includes(status)} onClick={() => setVisibleStatusSeries((current) => current.includes(status) ? current.filter((item) => item !== status) : [...current, status])} title={`${status}: ${count} repositories currently`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-opacity ${visibleStatusSeries.includes(status) ? "border-[#484f58] bg-[#161b22] text-[#e6edf3]" : "border-[#30363d] text-[#6e7681] opacity-50"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:statusColors[status]}} />{status}<span className="font-semibold tabular-nums">{count}</span></button>)}
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <svg viewBox="0 0 780 230" role="img" aria-label="Interactive line chart showing cumulative repository counts by current status over the last six months" className="min-w-[560px] w-full">
+                  {[30,70,110,150,190].map((y,index) => <g key={y}><line x1="46" x2="750" y1={y} y2={y} stroke="#30363d" strokeDasharray="3 5"/><text x="36" y={y+4} textAnchor="end" fill="#8b949e" fontSize="10">{Math.round(statusTrendMax * (4-index) / 4)}</text></g>)}
+                  {statusTrend.series.filter((series) => visibleStatusSeries.includes(series.status)).map((series) => <g key={series.status}>
+                    <path d={trendPath(series.points)} fill="none" stroke={statusColors[series.status]} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                    {series.points.map((point,index) => { const p=trendPoint(index,point.value); return <circle key={index} cx={p.x} cy={p.y} r="3.2" fill={statusColors[series.status]} stroke="#0d1117" strokeWidth="1.2"><title>{series.status} · week of {point.date.toLocaleDateString()} · {point.value} repositories</title></circle>; })}
+                  </g>)}
+                  {[0,6,13,19,26].map((index) => <text key={index} x={trendPoint(index,0).x} y="215" textAnchor="middle" fill="#8b949e" fontSize="10">{statusTrend.weeks[index].toLocaleDateString(undefined,{month:"short",day:"numeric"})}</text>)}
+                </svg>
+              </div>
+              <p className="mt-2 text-[11px] leading-5 text-[#8b949e]">Select a status above to show or hide its line. Hover over a point to see its week and repository count. Historical points are estimated from each repository's latest GitHub push date and its current status; past status snapshots are not available yet.</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#30363d] pt-4">
                 <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Active on GitHub</p><p className="mt-1 text-xl font-semibold text-[#3fb950]">{activeOnGitHubCount}</p><p className="text-[11px] text-[#6e7681]">Pushed in the last 30 days</p></div>
                 <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Contribution count</p><p className="mt-1 text-xl font-semibold text-[#79c0ff]">{totalContributions.toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">Last 12 months</p></div>
               </div>
