@@ -116,7 +116,10 @@ export async function POST(request: NextRequest) {
     });
     if (response.status === 401 || response.status === 403) return NextResponse.json({ error: "Ollama Cloud rejected the API key. Check OLLAMA_API_KEY in Render." }, { status: 502 });
     if (response.status === 429) return NextResponse.json({ error: "Ollama Cloud rate or usage limit reached. Check your Ollama account usage." }, { status: 429 });
-    if (!response.ok) return NextResponse.json({ error: "Ollama Cloud could not complete the analysis. Check the model name and account access." }, { status: 502 });
+    if (!response.ok) {
+      const providerDetail = (await response.text()).slice(0, 700);
+      return NextResponse.json({ error: `Ollama Cloud request failed (HTTP ${response.status}). ${providerDetail || "Check the selected model and Ollama account access."}` }, { status: 502 });
+    }
     const result = await response.json() as { message?: { content?: string }; model?: string };
     const summary = result.message?.content?.trim();
     if (!summary) return NextResponse.json({ error: "Ollama Cloud returned an empty analysis." }, { status: 502 });
