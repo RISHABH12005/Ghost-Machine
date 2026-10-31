@@ -86,7 +86,8 @@ export async function GET(request: NextRequest) {
         cache: "no-store", signal: AbortSignal.timeout(12000),
       }).catch(() => null),
     ]);
-    if (!orgResponse.ok && orgResponse.status !== 404) throw new Error("Could not load your GitHub organization memberships.");
+    if (!orgResponse.ok && orgResponse.status !== 403 && orgResponse.status !== 404) throw new Error("Could not load your GitHub organization memberships.");
+    const orgsPermissionRequired = orgResponse.status === 403;
     const orgRows = orgResponse.ok ? await orgResponse.json() as Array<{ organization: Org }> : [];
     const organizations = orgRows.map((row) => row.organization).filter(Boolean).map((org) => ({
       id: String(org.id), nodeId: org.node_id, login: org.login, name: org.name || org.login,
@@ -154,6 +155,7 @@ export async function GET(request: NextRequest) {
       totalIssues: collection.totalIssueContributions,
       days: calendar.weeks.flatMap((week) => week.contributionDays),
       organizations: organizationContributions,
+      orgsPermissionRequired,
       achievements,
       achievementsAvailable: achievements.length > 0,
       activitySeries,
