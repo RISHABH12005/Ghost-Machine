@@ -13,7 +13,6 @@ import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/type
 type AiRepositorySummary = { summary: string; model: string; generatedAt: string; source: string; error?: string };
 type AiProjectSuggestion = { id: number; status: ProjectStatus; priority: number; reason: string };
 type AiOrganization = { projects: AiProjectSuggestion[]; model: string; generatedAt: string };
-type DashboardInsights = { year: number; totalContributions: number; totalCommits: number; totalPullRequests: number; totalIssues: number; days: Array<{ date: string; contributionCount: number; contributionLevel: string }>; activitySeries: Array<{ quarter: string; contributions: number; commits: number; pullRequests: number; issues: number }>; organizations: Array<{ id: string; login: string; name: string; avatarUrl: string; url: string; contributions: number }>; achievements: Array<{ name: string; imageUrl: string }>; achievementsAvailable: boolean; orgsPermissionRequired?: boolean; syncedAt: string };
 type RepositoryAssessment = { status: ProjectStatus; confidence: string; assessedAt: string; evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }>; limitations?: string[]; error?: string };
 const STATUS_OPTIONS: ProjectStatus[] = ["Not assessed", "Needs review", "In progress", "Needs attention", "Completed", "On hold"];
 const STATUS_STYLES: Record<ProjectStatus, string> = {
@@ -76,15 +75,6 @@ export default function RepoPilotDashboard() {
   const [organizationError, setOrganizationError] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
-  const [contributionDays, setContributionDays] = useState<Array<{ date: string; contributionCount: number; contributionLevel: string }>>([]);
-  const [totalContributions, setTotalContributions] = useState(0);
-  const [contributionError, setContributionError] = useState("");
-  const [selectedStatusChart, setSelectedStatusChart] = useState<ProjectStatus | null>(null);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMetric, setSelectedMetric] = useState<string>("Contributions");
-  const [dashboardInsights, setDashboardInsights] = useState<DashboardInsights | null>(null);
-  const [insightsSyncedAt, setInsightsSyncedAt] = useState("");
-  const [insightsLoading, setInsightsLoading] = useState(false);
 
   const navigateTo = (label: string) => {
     const routes: Record<string, string> = {
@@ -283,35 +273,7 @@ export default function RepoPilotDashboard() {
     return filtered;
   }, [query, filter, repositories, organizationMode, aiOrganization]);
 
-  useEffect(() => {
-    if (!githubUser) return;
-    let active = true;
-    let inFlight = false;
-    const syncInsights = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      setInsightsLoading(true);
-      try {
-        const response = await fetch(`/api/dashboard/insights?year=${selectedYear}`, { cache: "no-store" });
-        const result = await response.json() as DashboardInsights & { error?: string };
-        if (!response.ok) throw new Error(result.error || "Could not load GitHub analytics.");
-        if (!active) return;
-        setDashboardInsights(result);
-        setTotalContributions(result.totalContributions || 0);
-        setContributionDays(result.days || []);
-        setInsightsSyncedAt(new Date(result.syncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-        setContributionError("");
-      } catch (cause) {
-        if (active) setContributionError(cause instanceof Error ? cause.message : "GitHub analytics unavailable.");
-      } finally {
-        inFlight = false;
-        if (active) setInsightsLoading(false);
-      }
-    };
-    void syncInsights();
-    const interval = window.setInterval(() => void syncInsights(), 60_000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, [githubUser, selectedYear]);
+
 
   useEffect(() => {
     if (!githubUser) return;
@@ -340,74 +302,8 @@ export default function RepoPilotDashboard() {
   const attentionCount = repositories.filter((repo) => repo.status === "Needs attention").length;
   const inProgressCount = repositories.filter((repo) => repo.status === "In progress").length;
   const completedCount = repositories.filter((repo) => repo.status === "Completed").length;
-  const aiStatusById = new Map(aiOrganization?.projects.map((item) => [item.id, item.status]) || []);
-  const statusCounts = STATUS_OPTIONS.map((status) => ({
-    status,
-    count: repositories.filter((repo) => (organizationMode === "ai" ? aiStatusById.get(repo.id) || repo.status : repo.status) === status).length,
-  }));
-  const activeOnGitHubCount = repositories.filter((repo) => repo.pushedAt && Date.now() - new Date(repo.pushedAt).getTime() <= 30 * 86_400_000).length;
-  const maxStatusCount = Math.max(1, ...statusCounts.map((item) => item.count));
-  const statusColors: Record<ProjectStatus, string> = {
-    "Not assessed": "#8b949e", "Needs review": "#79c0ff", "In progress": "#a371f7",
-    "Needs attention": "#f0883e", "Completed": "#3fb950", "On hold": "#d2a8ff",
-  };
-  const statusTrend = useMemo(() => {
-    const yearStart = new Date(selectedYear, 0, 1);
-    const quarters = Array.from({ length: 4 }, (_, index) => new Date(selectedYear, index * 3, 1));
-    const series = STATUS_OPTIONS.map((status) => {
-      const points = quarters.map((quarterStart, index) => {
-        const quarterEnd = new Date(selectedYear, index * 3 + 3, 0, 23, 59, 59);
-        const value = repositories.filter((repo) => {
-          const date = new Date(repo.pushedAt || repo.updatedAt);
-          const effectiveStatus = organizationMode === "ai" ? aiStatusById.get(repo.id) || repo.status : repo.status;
-          return effectiveStatus === status && date >= yearStart && date <= quarterEnd;
-        }).length;
-        return { date: quarterStart, value };
-      });
-      return { status, points };
-    });
-    return { weeks: quarters, series };
-  }, [repositories, organizationMode, aiOrganization, selectedYear]);
-  const statusTrendMax = Math.max(1, ...statusTrend.series.flatMap((series) => series.points.map((point) => point.value)));
-  const trendPoint = (index: number, value: number, max = statusTrendMax, count = 4) => ({
-    x: 46 + (index / Math.max(1, count - 1)) * 704,
-    y: 190 - (value / max) * 160,
-  });
-  const trendPath = (points: Array<{date: Date; value: number}>, max = statusTrendMax) => points.map((point, index) => {
-    const p = trendPoint(index, point.value, max, points.length);
-    return `${index === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-  }).join(" ");
-  const trendAreaPath = (points: Array<{date: Date; value: number}>, max = statusTrendMax) => {
-    const line = points.map((point, index) => {
-      const p = trendPoint(index, point.value, max, points.length);
-      return `${index === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-    }).join(" ");
-    return `${line} L 750 190 L 46 190 Z`;
-  };
-  const metricColors: Record<string, string> = {
-    "Contributions": "#3fb950", "Commits": "#58a6ff", "Pull requests": "#a371f7", "Issues": "#f0883e",
-  };
-  const activityKey: Record<string, "contributions" | "commits" | "pullRequests" | "issues"> = {
-    "Contributions": "contributions", "Commits": "commits", "Pull requests": "pullRequests", "Issues": "issues",
-  };
-  const selectedStatus = STATUS_OPTIONS.includes(selectedMetric as ProjectStatus) ? selectedMetric as ProjectStatus : null;
-  const selectedActivityKey = activityKey[selectedMetric];
-  const selectedStatusSeries = selectedStatus ? statusTrend.series.find((item) => item.status === selectedStatus) : null;
-  const selectedActivityPoints = dashboardInsights?.activitySeries.map((item, index) => ({
-    date: new Date(selectedYear, index * 3, 1), value: item[selectedActivityKey || "contributions"], label: item.quarter,
-  })) || [];
-  const selectedGraphPoints = selectedStatusSeries?.points || selectedActivityPoints;
-  const selectedGraphMax = Math.max(1, ...selectedGraphPoints.map((point) => point.value));
-  const selectedGraphColor = selectedStatus ? statusColors[selectedStatus] : metricColors[selectedMetric] || "#58a6ff";
-  const selectedGraphTotal = selectedStatus
-    ? statusCounts.find((item) => item.status === selectedStatus)?.count || 0
-    : selectedActivityKey === "contributions" ? dashboardInsights?.totalContributions || 0
-    : selectedActivityKey === "commits" ? dashboardInsights?.totalCommits || 0
-    : selectedActivityKey === "pullRequests" ? dashboardInsights?.totalPullRequests || 0
-    : dashboardInsights?.totalIssues || 0;
-
   const isOverviewPage = pathname === "/dashboard" || pathname === "/";
-  const isRepositoryPage = ["/repositories", "/work-board", "/priorities"].includes(pathname);
+  const isRepositoryPage = isOverviewPage || ["/repositories", "/work-board", "/priorities"].includes(pathname);
   const isActivityPage = pathname === "/activity";
   const isSettingsPage = pathname === "/settings";
 
@@ -453,7 +349,7 @@ export default function RepoPilotDashboard() {
 
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 border-b border-[#30363d] pb-5 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0"><div className="flex items-center gap-2 text-sm text-[#8b949e]"><Github size={16} /><span>Repositories</span><span>/</span><span className="text-[#e6edf3]">{username}</span></div><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">{activeNav === "Overview" ? "Dashboard" : activeNav === "Repositories" ? "Your repositories" : activeNav}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8b949e]">{activeNav === "Overview" ? "Your GitHub activity, contribution trends, and project status at a glance." : activeNav === "Repositories" ? "Browse, search, categorize, and update your GitHub repositories." : activeNav === "Work board" ? "Track projects currently in progress." : activeNav === "Priorities" ? "Focus on repositories that need attention first." : activeNav === "Activity history" ? "Review your recent workspace changes." : "Manage your GitHub account and workspace preferences."}</p></div>
+            <div className="min-w-0"><div className="flex items-center gap-2 text-sm text-[#8b949e]"><Github size={16} /><span>Repositories</span><span>/</span><span className="text-[#e6edf3]">{username}</span></div><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">{activeNav === "Overview" ? "Dashboard" : activeNav === "Repositories" ? "Your repositories" : activeNav}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8b949e]">{activeNav === "Overview" ? "Review your repositories, assess project health, and decide what to work on next." : activeNav === "Repositories" ? "Browse, search, categorize, and update your GitHub repositories." : activeNav === "Work board" ? "Track projects currently in progress." : activeNav === "Priorities" ? "Focus on repositories that need attention first." : activeNav === "Activity history" ? "Review your recent workspace changes." : "Manage your GitHub account and workspace preferences."}</p></div>
             <div className="flex items-center gap-2 text-sm text-[#8b949e]">{loading ? <><LoaderCircle size={15} className="animate-spin" /> Loading your GitHub repositories…</> : githubUser ? "Synced from your connected GitHub account" : "Sign in to load your repositories automatically"}</div>
           </div>
 
@@ -470,66 +366,14 @@ export default function RepoPilotDashboard() {
             <span className="ml-auto hidden text-xs text-[#8b949e] lg:inline">{lastSynced ? `Last synced at ${lastSynced}` : "Waiting for import"}</span>
           </section>}
 
-          {isOverviewPage && <section className="mt-5 grid gap-4">
-            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div><h2 className="font-semibold">GitHub and project analytics</h2><p className="mt-1 text-xs text-[#8b949e]">Select any coloured metric to open its yearly area graph.</p></div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#8b949e]">Year</span>
-                  <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="rounded-md border border-[#30363d] bg-[#161b22] px-3 py-1.5 text-sm text-[#e6edf3] outline-none focus:border-[#2f81f7]" aria-label="Select analytics year">
-                    {Array.from({ length: new Date().getFullYear() - 2022 }, (_, index) => new Date().getFullYear() - index).map((year) => <option key={year} value={year}>{year}</option>)}
-                  </select>
-                  <span className="text-[11px] text-[#8b949e]">{insightsLoading ? "Syncing…" : insightsSyncedAt ? `Synced ${insightsSyncedAt}` : "Waiting for sync"}</span>
-                </div>
-              </div>
-              <div className="mt-4">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8b949e]">Project status</p>
-                <div className="flex flex-wrap gap-2">
-                  {statusCounts.map(({status,count}) => <button key={status} type="button" aria-pressed={selectedMetric === status} onClick={() => setSelectedMetric(status)} title={`Show ${status} area graph · ${count} repositories`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-colors ${selectedMetric === status ? "border-[#8b949e] bg-[#30363d] text-white" : "border-[#30363d] bg-[#161b22] text-[#c9d1d9] hover:border-[#8b949e]"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:statusColors[status]}}/>{status}<strong className="tabular-nums">{count}</strong></button>)}
-                </div>
-              </div>
-              <div className="mt-4">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8b949e]">GitHub activity</p>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    {name:"Contributions",value:dashboardInsights?.totalContributions || 0},
-                    {name:"Commits",value:dashboardInsights?.totalCommits || 0},
-                    {name:"Pull requests",value:dashboardInsights?.totalPullRequests || 0},
-                    {name:"Issues",value:dashboardInsights?.totalIssues || 0},
-                  ]).map((metric) => <button key={metric.name} type="button" aria-pressed={selectedMetric === metric.name} onClick={() => setSelectedMetric(metric.name)} title={`Show ${metric.name} area graph for ${selectedYear}`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-colors ${selectedMetric === metric.name ? "border-[#8b949e] bg-[#30363d] text-white" : "border-[#30363d] bg-[#161b22] text-[#c9d1d9] hover:border-[#8b949e]"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:metricColors[metric.name]}}/>{metric.name}<strong className="tabular-nums">{metric.value.toLocaleString()}</strong></button>)}
-                </div>
-              </div>
-              <div className="mt-5 rounded-lg border border-[#30363d] bg-[#010409] p-3 sm:p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{backgroundColor:selectedGraphColor}}/><h3 className="font-semibold">{selectedMetric}</h3></div><p className="mt-1 text-xs text-[#8b949e]">{selectedYear} · quarterly activity</p></div>
-                  <div className="text-right"><p className="text-2xl font-semibold tabular-nums">{selectedGraphTotal.toLocaleString()}</p><p className="text-[11px] text-[#8b949e]">{selectedStatus ? "Current repositories" : `Total ${selectedMetric.toLowerCase()}`}</p></div>
-                </div>
-                {selectedGraphPoints.length ? <div className="mt-3 overflow-x-auto">
-                  <svg viewBox="0 0 780 230" role="img" aria-label={`${selectedMetric} area graph for ${selectedYear}`} className="min-w-[560px] w-full">
-                    {[30,70,110,150,190].map((y,index) => <g key={y}><line x1="46" x2="750" y1={y} y2={y} stroke="#30363d" strokeDasharray="3 5"/><text x="36" y={y+4} textAnchor="end" fill="#8b949e" fontSize="10">{Math.round(selectedGraphMax * (4-index) / 4)}</text></g>)}
-                    <path d={trendAreaPath(selectedGraphPoints,selectedGraphMax)} fill={selectedGraphColor} opacity="0.2"/>
-                    <path d={trendPath(selectedGraphPoints,selectedGraphMax)} fill="none" stroke={selectedGraphColor} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
-                    {selectedGraphPoints.map((point,index) => { const p=trendPoint(index,point.value,selectedGraphMax,selectedGraphPoints.length); const label="label" in point && typeof point.label === "string" ? point.label : `Q${index+1}`; return <g key={index}><circle cx={p.x} cy={p.y} r="5" fill={selectedGraphColor} stroke="#010409" strokeWidth="1.5"><title>{selectedMetric} · {label} · {point.value.toLocaleString()}</title></circle><circle cx={p.x} cy={p.y} r="12" fill="transparent"><title>{selectedMetric} · {label} · {point.value.toLocaleString()}</title></circle></g>; })}
-                    {selectedGraphPoints.map((point,index) => { const p=trendPoint(index,0,selectedGraphMax,selectedGraphPoints.length); return <text key={index} x={p.x} y="215" textAnchor="middle" fill="#8b949e" fontSize="11">{("label" in point && typeof point.label === "string" ? point.label : `Q${index+1}`)}</text>; })}
-                  </svg>
-                </div> : <p className="mt-5 rounded-md border border-dashed border-[#30363d] p-5 text-center text-xs text-[#8b949e]">{contributionError || "Loading GitHub activity data…"}</p>}
-                <p className="mt-2 text-[11px] leading-5 text-[#8b949e]">Hover over a plotted point to see its quarter and exact value. Status history is grouped by repository update date and current status; it is not a historical status audit.</p>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Total repositories</p><p className="mt-1 text-xl font-semibold text-[#e6edf3]">{repositories.length.toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">Authorized, non-fork repositories</p></div>
-                <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Total contributions · {selectedYear}</p><p className="mt-1 text-xl font-semibold text-[#3fb950]">{(dashboardInsights?.totalContributions || 0).toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">GitHub contribution calendar</p></div>
-              </div>
-              <div className="mt-5 border-t border-[#30363d] pt-4">
-                <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Organizations</h3><span className="text-xs text-[#8b949e]">Contributions · {selectedYear}</span></div>
-                {dashboardInsights?.organizations.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {dashboardInsights.organizations.map((org) => <a key={org.id} href={org.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-md border border-[#30363d] bg-[#161b22] p-3 hover:border-[#8b949e]"><img src={org.avatarUrl} alt={`${org.login} logo`} className="h-10 w-10 rounded-md" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{org.name}</span><span className="block text-xs text-[#8b949e]">@{org.login}</span></span><span className="text-right"><strong className="block text-sm tabular-nums">{org.contributions.toLocaleString()}</strong><span className="text-[10px] text-[#8b949e]">contributions</span></span></a>)}
-                </div> : <p className="mt-3 rounded-md border border-dashed border-[#30363d] p-4 text-xs text-[#8b949e]">No active GitHub organization memberships were returned for this account.</p>}
-                {dashboardInsights?.orgsPermissionRequired && <div className="mt-3 rounded-md border border-[#d29922]/40 bg-[#d29922]/10 p-3"><p className="text-xs text-[#e3b341]">Reconnect GitHub to grant read-only organization access and load organization contribution totals.</p><button type="button" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/api/auth/github"; }} className="mt-2 rounded-md border border-[#d29922]/50 px-3 py-1.5 text-xs text-[#e3b341] hover:bg-[#d29922]/10">Reconnect GitHub</button></div>}
-              </div>
-              <div className="mt-5 border-t border-[#30363d] pt-4">
-                <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">GitHub achievements</h3><a href={`https://github.com/${username}?tab=achievements`} target="_blank" rel="noreferrer" className="text-xs text-[#58a6ff] hover:underline">View on GitHub</a></div>
-                {dashboardInsights?.achievements.length ? <div className="mt-3 flex flex-wrap gap-3">{dashboardInsights.achievements.map((achievement) => <div key={achievement.name} title={achievement.name} className="flex w-24 flex-col items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] p-3"><img src={achievement.imageUrl} alt={achievement.name} className="h-12 w-12 object-contain"/><span className="text-center text-[11px] text-[#c9d1d9]">{achievement.name}</span></div>)}</div> : <p className="mt-3 rounded-md border border-dashed border-[#30363d] p-4 text-xs text-[#8b949e]">GitHub did not expose achievement artwork for this profile. Use “View on GitHub” to see the official achievement page.</p>}
-              </div>
+          {isOverviewPage && <section className="mt-5 rounded-lg border border-[#30363d] bg-[#0d1117] p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div><h2 className="text-lg font-semibold">Your repositories</h2><p className="mt-1 text-sm text-[#8b949e]">Review repository health, update project status, and see what needs your attention.</p></div>
+              <button type="button" onClick={() => navigateTo("Repositories")} className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#30363d] px-3 text-sm text-[#c9d1d9] hover:border-[#8b949e] hover:bg-[#161b22]">View all repositories</button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border border-[#30363d] bg-[#161b22] p-3"><p className="text-sm font-medium">Needs attention</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">{attentionCount ? `${attentionCount} repository(ies) need a review.` : "No repositories are currently marked as needing attention."}</p><button type="button" onClick={() => navigateTo("Priorities")} className="mt-3 text-xs font-medium text-[#e3b341] hover:underline">Review priorities</button></div>
+              <div className="rounded-md border border-[#30363d] bg-[#161b22] p-3"><p className="text-sm font-medium">Work in progress</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">{inProgressCount ? `${inProgressCount} repository(ies) are in progress.` : "No repositories are currently marked in progress."}</p><button type="button" onClick={() => navigateTo("Work board")} className="mt-3 text-xs font-medium text-[#58a6ff] hover:underline">Open work board</button></div>
             </div>
           </section>}
 
