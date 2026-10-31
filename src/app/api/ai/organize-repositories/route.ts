@@ -25,7 +25,7 @@ async function chooseModel(apiKey: string): Promise<string> {
   const data = await response.json() as ModelCatalog;
   const models = (data.models || []).map((item) => item.name || item.model).filter((name): name is string => Boolean(name));
   if (!models.length) throw new Error("Your Ollama Cloud account returned no available models. Check your account and API key.");
-  const preferred = ["qwen3.5", "qwen3", "deepseek", "gpt-oss", "glm", "gemma4", "llama"];
+  const preferred = ["gemma4:31b-cloud", "gemma4", "qwen3.5", "qwen3", "deepseek", "gpt-oss", "glm", "llama"];
   for (const family of preferred) {
     const match = models.find((name) => name.toLowerCase().includes(family));
     if (match) return match;
@@ -68,12 +68,22 @@ export async function POST(request: NextRequest) {
       "Priority 1 means most urgent; 5 means lowest urgency. Archived repositories should be On hold. Do not mark a project Completed merely because it is inactive. Use Not assessed when evidence is insufficient. Keep each reason under 25 words. Include every input id exactly once.",
       JSON.stringify(compact),
     ].join("\n");
-    const response = await fetch("https://ollama.com/api/chat", {
+    let response = await fetch("https://ollama.com/api/chat", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], format: "json", stream: false }),
       cache: "no-store", signal: AbortSignal.timeout(90000),
     });
+    let activeModel = model;
+    if (response.status === 402 && !model.toLowerCase().includes("gemma4:31b-cloud")) {
+      activeModel = "gemma4:31b-cloud";
+      response = await fetch("https://ollama.com/api/chat", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ model: activeModel, messages: [{ role: "user", content: prompt }], format: "json", stream: false }),
+        cache: "no-store", signal: AbortSignal.timeout(90000),
+      });
+    }
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 700);
       return NextResponse.json({ error: `Ollama Cloud failed to organize projects (HTTP ${response.status}). ${detail}` }, { status: 502 });
@@ -92,7 +102,7 @@ export async function POST(request: NextRequest) {
     if (projects.length !== repositories.length || new Set(projects.map((item) => item.id)).size !== repositories.length) {
       return NextResponse.json({ error: "The AI did not return a complete classification for every repository. Please retry." }, { status: 502 });
     }
-    return NextResponse.json({ projects, model: result.model || model, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ projects, model: result.model || activeModel, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "AI organization failed." }, { status: 502 });
   }
