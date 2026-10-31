@@ -10,6 +10,8 @@ import {
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
 
 type AiRepositorySummary = { summary: string; model: string; generatedAt: string; source: string; error?: string };
+type AiProjectSuggestion = { id: number; status: ProjectStatus; priority: number; reason: string };
+type AiOrganization = { projects: AiProjectSuggestion[]; model: string; generatedAt: string };
 type RepositoryAssessment = { status: ProjectStatus; confidence: string; assessedAt: string; evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }>; limitations?: string[]; error?: string };
 const STATUS_OPTIONS: ProjectStatus[] = ["Not assessed", "Needs review", "In progress", "Needs attention", "Completed", "On hold"];
 const STATUS_STYLES: Record<ProjectStatus, string> = {
@@ -64,6 +66,10 @@ export default function RepoPilotDashboard() {
   const [githubUser, setGithubUser] = useState<{ login: string; avatarUrl?: string | null } | null>(null);
   const [aiSummaries, setAiSummaries] = useState<Record<number, AiRepositorySummary>>({});
   const [summarizingId, setSummarizingId] = useState<number | null>(null);
+  const [organizationMode, setOrganizationMode] = useState<"manual" | "ai">("manual");
+  const [aiOrganization, setAiOrganization] = useState<AiOrganization | null>(null);
+  const [organizing, setOrganizing] = useState(false);
+  const [organizationError, setOrganizationError] = useState("");
 
   const navigateTo = (label: string) => {
     setActiveNav(label);
@@ -139,6 +145,40 @@ export default function RepoPilotDashboard() {
     }
   }, []);
 
+  const organizeAllRepositories = async () => {
+    if (!repositories.length) return;
+    setOrganizing(true);
+    setOrganizationError("");
+    try {
+      const response = await fetch("/api/ai/organize-repositories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repositories }),
+      });
+      const result = await response.json() as AiOrganization & { error?: string };
+      if (!response.ok) throw new Error(result.error || "AI organization failed.");
+      setAiOrganization(result);
+      setOrganizationMode("ai");
+    } catch (cause) {
+      setOrganizationError(cause instanceof Error ? cause.message : "AI organization failed.");
+    } finally { setOrganizing(false); }
+  };
+
+  const applyAllAiSuggestions = () => {
+    if (!aiOrganization) return;
+    const suggestions = new Map(aiOrganization.projects.map((item) => [item.id, item.status]));
+    const updated = repositories.map((repository) => ({
+      ...repository,
+      status: suggestions.get(repository.id) || repository.status,
+    }));
+    setRepositories(updated);
+    try {
+      localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status]))));
+    } catch { /* Statuses still update for this session. */ }
+    setActivity((items) => [{ id: `ai-apply-${Date.now()}`, message: `Applied AI status suggestions to ${aiOrganization.projects.length} repositories`, time: new Date().toLocaleString() }, ...items].slice(0, 50));
+    setOrganizationMode("manual");
+  };
+
   const summarizeRepository = async (repository: Repository) => {
     const [owner, name] = repository.fullName.split("/");
     if (!owner || !name) return;
@@ -187,11 +227,21 @@ export default function RepoPilotDashboard() {
 
   const filteredRepositories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return repositories.filter((repository) => {
+    const filtered = repositories.filter((repository) => {
       const matchesQuery = !normalizedQuery || [repository.name, repository.fullName, repository.description, repository.language, repository.defaultBranch, repository.topics.join(" ")].join(" ").toLowerCase().includes(normalizedQuery);
       return matchesQuery && (filter === "All projects" || repository.status === filter);
     });
-  }, [query, filter, repositories]);
+    if (organizationMode === "ai" && aiOrganization) {
+      const ranking = new Map(aiOrganization.projects.map((item) => [item.id, item]));
+      return [...filtered].sort((a, b) => {
+        const aSuggestion = ranking.get(a.id);
+        const bSuggestion = ranking.get(b.id);
+        return (aSuggestion?.priority ?? 6) - (bSuggestion?.priority ?? 6) ||
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+    }
+    return filtered;
+  }, [query, filter, repositories, organizationMode, aiOrganization]);
 
   const attentionCount = repositories.filter((repo) => repo.status === "Needs attention").length;
   const inProgressCount = repositories.filter((repo) => repo.status === "In progress").length;
@@ -266,9 +316,24 @@ export default function RepoPilotDashboard() {
               <div><h2 className="text-lg font-semibold">Repositories <span className="ml-1 rounded-full bg-[#21262d] px-2 py-0.5 text-sm font-normal text-[#8b949e]">{filteredRepositories.length}</span></h2><p className="mt-1 text-xs text-[#8b949e]">{githubUser ? "Authorized repositories for " : "Public repositories from "}<a className="text-[#58a6ff] hover:underline" href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer">@{username}</a>{lastSynced ? ` · synced ${lastSynced}` : ""}</p></div>
               <a href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-md border border-[#30363d] bg-[#21262d] px-3 text-sm hover:border-[#8b949e] sm:self-auto">View on GitHub <ExternalLink size={13} /></a>
             </div>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <div className="mt-4 flex flex-col gap-3 rounded-md border border-[#30363d] bg-[#0d1117] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><p className="text-sm font-medium text-[#e6edf3]">Project organization</p><p className="mt-1 text-xs text-[#8b949e]">Switch between your manual order and AI-prioritized recommendations.</p></div>
+                <div className="flex items-center gap-1 rounded-md border border-[#30363d] bg-[#010409] p-1">
+                  <button type="button" onClick={() => setOrganizationMode("manual")} className={`rounded px-3 py-1.5 text-xs ${organizationMode === "manual" ? "bg-[#30363d] text-white" : "text-[#8b949e] hover:text-white"}`}>Manual</button>
+                  <button type="button" onClick={() => { if (aiOrganization) setOrganizationMode("ai"); else void organizeAllRepositories(); }} disabled={organizing} className={`rounded px-3 py-1.5 text-xs ${organizationMode === "ai" ? "bg-[#8957e5]/25 text-[#d2a8ff]" : "text-[#8b949e] hover:text-white"} disabled:opacity-50`}>AI organized</button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void organizeAllRepositories()} disabled={organizing || repositories.length === 0} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#8957e5]/60 bg-[#8957e5]/10 px-3 text-xs font-medium text-[#d2a8ff] hover:bg-[#8957e5]/20 disabled:opacity-50">{organizing ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}{organizing ? "Organizing all repositories…" : aiOrganization ? "Refresh AI organization" : "Organize all with AI"}</button>
+                {aiOrganization && <><span className="text-xs text-[#8b949e]">Sorted by AI priority · {aiOrganization.model}</span><button type="button" onClick={applyAllAiSuggestions} className="rounded-md border border-[#238636]/60 px-3 py-2 text-xs text-[#3fb950] hover:bg-[#238636]/10">Apply all suggestions to manual statuses</button></>}
+              </div>
+              {organizationError && <p role="alert" className="text-sm text-[#ff7b72]">{organizationError}</p>}
+              {aiOrganization && organizationMode === "ai" && <p className="text-xs text-[#8b949e]">AI suggestions are a separate view and do not overwrite your manual statuses until you choose “Apply all suggestions”. Generated {relativeDate(aiOrganization.generatedAt)}.</p>}
+            </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <label className="flex min-h-10 flex-1 items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 focus-within:border-[#2f81f7]"><Search size={16} className="shrink-0 text-[#8b949e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a repository…" className="w-full bg-transparent text-sm outline-none placeholder:text-[#6e7681]" aria-label="Search repositories" />{query && <button onClick={() => setQuery("")} aria-label="Clear search" className="text-[#8b949e] hover:text-[#e6edf3]"><X size={14} /></button>}</label>
-              <label className="flex min-h-10 items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 text-sm text-[#8b949e]"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)} className="max-w-[190px] bg-transparent py-1 text-sm text-[#c9d1d9] outline-none" aria-label="Filter by status"><option>All projects</option>{STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}</select></label>
+              <label className="flex min-h-10 items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 text-sm text-[#8b949e]"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)} className="max-w-[190px] bg-transparent py-1 text-sm text-[#c9d1d9] outline-none" aria-label="Filter by status"><option className="bg-[#161b22] text-[#e6edf3]">All projects</option>{STATUS_OPTIONS.map((status) => <option className="bg-[#161b22] text-[#e6edf3]" key={status}>{status}</option>)}</select></label>
             </div>
 
             {loading && repositories.length === 0 ? <div className="mt-4 flex items-center justify-center gap-3 rounded-md border border-[#30363d] px-6 py-16 text-sm text-[#8b949e]"><LoaderCircle className="animate-spin" size={18} />Loading your authorized GitHub repositories…</div> : filteredRepositories.length > 0 ? (
@@ -278,7 +343,7 @@ export default function RepoPilotDashboard() {
                     <div className="flex min-w-0 gap-3">
                       <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#30363d] bg-[#161b22] text-[#8b949e]"><FolderGit2 size={18} /></div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2"><a href={repository.url} target="_blank" rel="noreferrer" className="break-all text-base font-semibold text-[#58a6ff] hover:underline">{repository.name}</a>{repository.archived && <span className="rounded-full border border-[#6e7681]/60 px-2 py-0.5 text-xs text-[#8b949e]">Archived</span>}{repository.private && <span className="rounded-full border border-[#d29922]/60 px-2 py-0.5 text-xs text-[#e3b341]">Private</span>}<StatusPill status={repository.status} /></div>
+                        <div className="flex flex-wrap items-center gap-2"><a href={repository.url} target="_blank" rel="noreferrer" className="break-all text-base font-semibold text-[#58a6ff] hover:underline">{repository.name}</a>{repository.archived && <span className="rounded-full border border-[#6e7681]/60 px-2 py-0.5 text-xs text-[#8b949e]">Archived</span>}{repository.private && <span className="rounded-full border border-[#d29922]/60 px-2 py-0.5 text-xs text-[#e3b341]">Private</span>}<StatusPill status={repository.status} />{organizationMode === "ai" && aiOrganization && (() => { const suggestion = aiOrganization.projects.find((item) => item.id === repository.id); return suggestion ? <span title={suggestion.reason} className="rounded-full border border-[#8957e5]/50 px-2 py-0.5 text-xs text-[#d2a8ff]">AI P{suggestion.priority}: {suggestion.status}</span> : null; })()}</div>
                         <p className="mt-1.5 max-w-3xl text-sm leading-5 text-[#8b949e]">{repository.description || "No description provided."}</p>
                         {repository.topics.length > 0 && <div className="mt-2.5 flex flex-wrap gap-1.5">{repository.topics.slice(0, 6).map((topic) => <a key={topic} href={`https://github.com/topics/${encodeURIComponent(topic)}`} target="_blank" rel="noreferrer" className="rounded-full bg-[#1f6feb]/15 px-2.5 py-0.5 text-xs font-medium text-[#58a6ff] hover:bg-[#1f6feb]/25">{topic}</a>)}</div>}
                         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[#8b949e]">
