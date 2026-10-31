@@ -5,7 +5,7 @@ import {
   Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2, ChevronDown,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu,
-  RefreshCw, Search, Settings2, ShieldAlert, Sparkles, Star, X, Zap,
+  RefreshCw, Search, Settings2, ShieldAlert, Sparkles, Star, X, Zap, PanelRightOpen, PanelRightClose, ChevronLeft,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
 
@@ -70,6 +70,11 @@ export default function RepoPilotDashboard() {
   const [aiOrganization, setAiOrganization] = useState<AiOrganization | null>(null);
   const [organizing, setOrganizing] = useState(false);
   const [organizationError, setOrganizationError] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
+  const [contributionDays, setContributionDays] = useState<Array<{ date: string; contributionCount: number; contributionLevel: string }>>([]);
+  const [totalContributions, setTotalContributions] = useState(0);
+  const [contributionError, setContributionError] = useState("");
 
   const navigateTo = (label: string) => {
     setActiveNav(label);
@@ -101,6 +106,15 @@ export default function RepoPilotDashboard() {
       }));
       setRepositories(imported);
       setUsername(data.username);
+      try {
+        const savedOrganization = localStorage.getItem(`repopilot-ai-organization:${data.username.toLowerCase()}`);
+        if (savedOrganization) {
+          const parsed = JSON.parse(savedOrganization) as AiOrganization;
+          if (Array.isArray(parsed.projects)) { setAiOrganization(parsed); setOrganizationMode("ai"); }
+        } else { setAiOrganization(null); setOrganizationMode("manual"); }
+        setSidebarCollapsed(localStorage.getItem(`repopilot-sidebar-collapsed:${data.username.toLowerCase()}`) === "true");
+        setAiSidebarOpen(localStorage.getItem(`repopilot-ai-sidebar:${data.username.toLowerCase()}`) === "true");
+      } catch { /* Keep safe defaults if saved preferences are malformed. */ }
       setLastSynced(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Repository import failed.");
@@ -159,6 +173,7 @@ export default function RepoPilotDashboard() {
       if (!response.ok) throw new Error(result.error || "AI organization failed.");
       setAiOrganization(result);
       setOrganizationMode("ai");
+      try { localStorage.setItem(`repopilot-ai-organization:${username.toLowerCase()}`, JSON.stringify(result)); } catch { /* AI suggestions remain available for this session. */ }
     } catch (cause) {
       setOrganizationError(cause instanceof Error ? cause.message : "AI organization failed.");
     } finally { setOrganizing(false); }
@@ -177,6 +192,7 @@ export default function RepoPilotDashboard() {
     } catch { /* Statuses still update for this session. */ }
     setActivity((items) => [{ id: `ai-apply-${Date.now()}`, message: `Applied AI status suggestions to ${aiOrganization.projects.length} repositories`, time: new Date().toLocaleString() }, ...items].slice(0, 50));
     setOrganizationMode("manual");
+    try { localStorage.removeItem(`repopilot-ai-organization:${username.toLowerCase()}`); } catch { /* Saved statuses are already persisted above. */ }
   };
 
   const summarizeRepository = async (repository: Repository) => {
@@ -244,9 +260,43 @@ export default function RepoPilotDashboard() {
     return filtered;
   }, [query, filter, repositories, organizationMode, aiOrganization]);
 
+  useEffect(() => {
+    if (!githubUser) return;
+    let active = true;
+    void fetch("/api/dashboard/insights", { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json() as { totalContributions?: number; days?: Array<{ date: string; contributionCount: number; contributionLevel: string }>; error?: string };
+        if (!response.ok) throw new Error(result.error || "Could not load contribution history.");
+        if (active) { setTotalContributions(result.totalContributions || 0); setContributionDays(result.days || []); setContributionError(""); }
+      })
+      .catch((cause) => { if (active) setContributionError(cause instanceof Error ? cause.message : "Contribution history unavailable."); });
+    return () => { active = false; };
+  }, [githubUser]);
+
+  const toggleSidebar = () => {
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      setSidebarCollapsed((current) => {
+        const next = !current;
+        try { localStorage.setItem(`repopilot-sidebar-collapsed:${username.toLowerCase()}`, String(next)); } catch {}
+        return next;
+      });
+    } else setMobileMenuOpen((current) => !current);
+  };
+
+  const toggleAiSidebar = () => {
+    setAiSidebarOpen((current) => {
+      const next = !current;
+      try { localStorage.setItem(`repopilot-ai-sidebar:${username.toLowerCase()}`, String(next)); } catch {}
+      return next;
+    });
+  };
+
   const attentionCount = repositories.filter((repo) => repo.status === "Needs attention").length;
   const inProgressCount = repositories.filter((repo) => repo.status === "In progress").length;
   const completedCount = repositories.filter((repo) => repo.status === "Completed").length;
+  const statusCounts = STATUS_OPTIONS.map((status) => ({ status, count: repositories.filter((repo) => repo.status === status).length }));
+  const activeOnGitHubCount = repositories.filter((repo) => repo.pushedAt && Date.now() - new Date(repo.pushedAt).getTime() <= 30 * 86_400_000).length;
+  const maxStatusCount = Math.max(1, ...statusCounts.map((item) => item.count));
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
