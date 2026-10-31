@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
 
-const DEFAULT_USERNAME = "RISHABH12005";
 type RepositoryAssessment = { status: ProjectStatus; confidence: string; assessedAt: string; evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }>; limitations?: string[]; error?: string };
 const STATUS_OPTIONS: ProjectStatus[] = ["Not assessed", "Needs review", "In progress", "Needs attention", "Completed", "On hold"];
 const STATUS_STYLES: Record<ProjectStatus, string> = {
@@ -50,8 +49,7 @@ function Stat({ label, value, icon: Icon }: { label: string; value: number; icon
 export default function RepoPilotDashboard() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All projects");
-  const [usernameInput, setUsernameInput] = useState(DEFAULT_USERNAME);
-  const [username, setUsername] = useState(DEFAULT_USERNAME);
+  const [username, setUsername] = useState("");
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -75,28 +73,25 @@ export default function RepoPilotDashboard() {
     else if (label === "Settings") setActivePanel("settings");
   };
 
-  const importRepositories = useCallback(async (requestedUsername: string) => {
-    const cleanUsername = requestedUsername.trim();
-    if (!/^[a-zA-Z0-9-]{1,39}$/.test(cleanUsername)) { setError("Enter a valid GitHub username."); return; }
+  const importRepositories = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/repositories?username=${encodeURIComponent(cleanUsername)}`, { cache: "no-store" });
+      const response = await fetch("/api/repositories", { cache: "no-store" });
       const data = (await response.json()) as RepositoryImportResponse;
       if (!response.ok) {
         const retryAt = data.rateLimit?.retryAt ? ` Retry after ${new Date(data.rateLimit.retryAt).toLocaleTimeString()}.` : "";
         throw new Error((data.error || "Could not import repositories.") + retryAt);
       }
       const savedStatuses: Record<string, ProjectStatus> = {};
-      try { Object.assign(savedStatuses, JSON.parse(localStorage.getItem(`repopilot-statuses:${cleanUsername.toLowerCase()}`) || "{}")); } catch { /* Use defaults if local preferences are invalid. */ }
+      try { Object.assign(savedStatuses, JSON.parse(localStorage.getItem(`repopilot-statuses:${data.username.toLowerCase()}`) || "{}")); } catch { /* Use defaults if local preferences are invalid. */ }
       const imported: Repository[] = data.repositories.map((repository) => ({
         ...repository,
         status: savedStatuses[String(repository.id)] || (repository.archived ? "On hold" : "Not assessed"),
         note: "",
       }));
       setRepositories(imported);
-      setUsername(cleanUsername);
-      setUsernameInput(cleanUsername);
+      setUsername(data.username);
       setLastSynced(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Repository import failed.");
@@ -112,13 +107,15 @@ export default function RepoPilotDashboard() {
         if (!active) return;
         if (session.authenticated && session.user) {
           setGithubUser(session.user);
-          setUsernameInput(session.user.login);
-          await importRepositories(session.user.login);
+          await importRepositories();
         } else {
-          await importRepositories(DEFAULT_USERNAME);
+          setGithubUser(null);
+          setUsername("");
+          setRepositories([]);
+          setLoading(false);
         }
       } catch {
-        if (active) await importRepositories(DEFAULT_USERNAME);
+        if (active) setError("Unable to check your GitHub session. Please refresh and sign in again.");
       }
     })();
     return () => { active = false; };
@@ -215,24 +212,21 @@ export default function RepoPilotDashboard() {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button title="Help" aria-label="Help" onClick={() => setActivePanel("help")} className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><CircleHelp size={17} /></button>
             <button title="Notifications" aria-label="Notifications" onClick={() => setActivePanel("notifications")} className="relative rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><Bell size={17} />{attentionCount > 0 && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#e3b341]" />}</button>
-            <a href="/api/auth/github" className="ml-1 inline-flex items-center gap-2 rounded-md border border-[#238636] bg-[#238636] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#2ea043] sm:px-3 sm:text-sm"><Github size={15} /><span>{githubUser ? `@${githubUser.login}` : "Sign in with GitHub"}</span></a>{githubUser && <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); setGithubUser(null); setRepositories([]); setUsername(DEFAULT_USERNAME); setUsernameInput(DEFAULT_USERNAME); await importRepositories(DEFAULT_USERNAME); }} className="rounded-md border border-[#30363d] px-2.5 py-1.5 text-xs hover:bg-[#21262d]">Sign out</button>}<a href={`https://github.com/${username}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-2.5 py-1.5 text-xs hover:border-[#8b949e]"><span className="hidden sm:inline">View profile</span><ExternalLink size={12} /></a>
+            <a href="/api/auth/github" className="ml-1 inline-flex items-center gap-2 rounded-md border border-[#238636] bg-[#238636] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#2ea043] sm:px-3 sm:text-sm"><Github size={15} /><span>{githubUser ? `@${githubUser.login}` : "Sign in with GitHub"}</span></a>{githubUser && <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); setGithubUser(null); setRepositories([]); setUsername(""); }} className="rounded-md border border-[#30363d] px-2.5 py-1.5 text-xs hover:bg-[#21262d]">Sign out</button>}<a href={`https://github.com/${username}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-2.5 py-1.5 text-xs hover:border-[#8b949e]"><span className="hidden sm:inline">View profile</span><ExternalLink size={12} /></a>
           </div>
         </header>
 
         {activePanel && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="panel-title" className="w-full max-w-lg rounded-xl border border-[#30363d] bg-[#0d1117] p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-[#8b949e]">REPOPILOT WORKSPACE</p><h2 id="panel-title" className="mt-2 text-xl font-semibold">{activePanel === "help" ? "How to use RepoPilot" : activePanel === "notifications" ? "Notifications" : activePanel === "activity" ? "Activity history" : "Settings"}</h2></div><button onClick={() => setActivePanel(null)} aria-label="Close dialog" className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d]"><X size={17} /></button></div>
-          {activePanel === "help" ? <div className="mt-5 space-y-3 text-sm leading-6 text-[#c9d1d9]"><p><strong>Import repositories:</strong> enter a public GitHub username and select Import repositories.</p><p><strong>Search and filter:</strong> search by repository name, description, language, branch, or topic.</p><p><strong>Track progress:</strong> change a repository status. It is saved in this browser for that username.</p><p><strong>Current limits:</strong> private repositories, cross-device sync, and automatic repository assessment are not enabled yet. New repositories remain “Not assessed” until you review them.</p></div> : activePanel === "notifications" ? <div className="mt-5"><p className="text-sm text-[#8b949e]">{attentionCount ? `${attentionCount} project(s) marked for attention.` : "You have no projects marked as needing attention."}</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{repositories.filter((repo) => repo.status === "Needs attention").map((repo) => <a key={repo.id} href={repo.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border border-[#30363d] p-3 text-sm hover:bg-[#161b22]">{repo.name}<ExternalLink size={14} /></a>)}</div><button onClick={() => { setActivePanel(null); navigateTo("Priorities"); }} className="mt-4 rounded-md bg-[#238636] px-3 py-2 text-sm font-medium text-white hover:bg-[#2ea043]">View priorities</button></div> : activePanel === "activity" ? <div className="mt-5">{activity.length ? <ol className="max-h-80 space-y-3 overflow-y-auto">{activity.map((item) => <li key={item.id} className="border-l border-[#30363d] pl-3"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="rounded-md border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">No status changes in this session yet.</p>}</div> : <div className="mt-5 space-y-4"><div><label htmlFor="settings-username" className="mb-2 block text-sm text-[#c9d1d9]">GitHub username</label><input id="settings-username" value={usernameInput} onChange={(event) => setUsernameInput(event.target.value)} className="min-h-10 w-full rounded-md border border-[#30363d] bg-[#010409] px-3 text-sm outline-none focus:border-[#2f81f7]" /></div><button onClick={() => { setActivePanel(null); void importRepositories(usernameInput); }} disabled={loading} className="w-full rounded-md bg-[#238636] px-3 py-2 text-sm font-medium text-white hover:bg-[#2ea043] disabled:opacity-50">Import this account</button><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Reset saved statuses</p><p className="mt-1 text-xs text-[#8b949e]">Remove saved status preferences for @{username}.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Not assessed" }))); setActivity((items) => [{ id: `reset-${Date.now()}`, message: `Reset saved statuses for @${username}`, time: new Date().toLocaleString() }, ...items].slice(0, 50)); setActivePanel(null); }} className="mt-3 rounded-md border border-[#da3633]/60 px-3 py-1.5 text-xs text-[#ff7b72] hover:bg-[#da3633]/10">Reset statuses</button></div></div>}
+          {activePanel === "help" ? <div className="mt-5 space-y-3 text-sm leading-6 text-[#c9d1d9]"><p><strong>Import repositories:</strong> sign in with GitHub; your repositories load automatically.</p><p><strong>Search and filter:</strong> search by repository name, description, language, branch, or topic.</p><p><strong>Track progress:</strong> change a repository status. It is saved in this browser for that username.</p><p><strong>Current limits:</strong> private repositories, cross-device sync, and automatic repository assessment are not enabled yet. New repositories remain “Not assessed” until you review them.</p></div> : activePanel === "notifications" ? <div className="mt-5"><p className="text-sm text-[#8b949e]">{attentionCount ? `${attentionCount} project(s) marked for attention.` : "You have no projects marked as needing attention."}</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{repositories.filter((repo) => repo.status === "Needs attention").map((repo) => <a key={repo.id} href={repo.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border border-[#30363d] p-3 text-sm hover:bg-[#161b22]">{repo.name}<ExternalLink size={14} /></a>)}</div><button onClick={() => { setActivePanel(null); navigateTo("Priorities"); }} className="mt-4 rounded-md bg-[#238636] px-3 py-2 text-sm font-medium text-white hover:bg-[#2ea043]">View priorities</button></div> : activePanel === "activity" ? <div className="mt-5">{activity.length ? <ol className="max-h-80 space-y-3 overflow-y-auto">{activity.map((item) => <li key={item.id} className="border-l border-[#30363d] pl-3"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="rounded-md border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">No status changes in this session yet.</p>}</div> : <div className="mt-5 space-y-4"><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Connected GitHub account</p><p className="mt-1 text-xs text-[#8b949e]">{githubUser ? `Signed in as @${githubUser.login}. Repositories load automatically from this account.` : "Not connected. Sign in with GitHub to load your repositories automatically."}</p></div><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Reset saved statuses</p><p className="mt-1 text-xs text-[#8b949e]">Remove saved status preferences for @{username}.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Not assessed" }))); setActivity((items) => [{ id: `reset-${Date.now()}`, message: `Reset saved statuses for @${username}`, time: new Date().toLocaleString() }, ...items].slice(0, 50)); setActivePanel(null); }} className="mt-3 rounded-md border border-[#da3633]/60 px-3 py-1.5 text-xs text-[#ff7b72] hover:bg-[#da3633]/10">Reset statuses</button></div></div>}
           <div className="mt-6 flex justify-end border-t border-[#30363d] pt-4"><button onClick={() => setActivePanel(null)} className="rounded-md border border-[#30363d] px-3 py-1.5 text-sm hover:bg-[#21262d]">Close</button></div></section></div>}
 
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 border-b border-[#30363d] pb-5 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0"><div className="flex items-center gap-2 text-sm text-[#8b949e]"><Github size={16} /><span>Repositories</span><span>/</span><span className="text-[#e6edf3]">{username}</span></div><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">Your repositories</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8b949e]">A single place to review your projects, track what needs attention, and pick up where you left off.</p></div>
-            <form className="flex w-full flex-col gap-2 sm:flex-row md:w-auto md:min-w-[400px]" onSubmit={(event) => { event.preventDefault(); void importRepositories(usernameInput); }}>
-              <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 focus-within:border-[#2f81f7]"><span className="text-sm text-[#8b949e]">github.com/</span><input value={usernameInput} onChange={(event) => setUsernameInput(event.target.value)} aria-label="GitHub username" placeholder="username" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#6e7681]" /></label>
-              <button disabled={loading} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#3fb950]/40 bg-[#238636] px-3.5 text-sm font-medium text-white hover:bg-[#2ea043] disabled:cursor-not-allowed disabled:opacity-60">{loading ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={14} />}{loading ? "Importing…" : "Import repositories"}</button>
-            </form>
+            <div className="flex items-center gap-2 text-sm text-[#8b949e]">{loading ? <><LoaderCircle size={15} className="animate-spin" /> Loading your GitHub repositories…</> : githubUser ? "Synced from your connected GitHub account" : "Sign in to load your repositories automatically"}</div>
           </div>
 
-          {error && <div role="alert" className="mt-4 flex items-start gap-2 rounded-md border border-[#da3633]/50 bg-[#da3633]/10 p-3 text-sm text-[#ff7b72]"><AlertCircle size={17} className="mt-0.5 shrink-0" /><div className="flex-1">{error}</div><button onClick={() => void importRepositories(username)} className="font-medium underline underline-offset-4">Retry</button></div>}
+          {error && <div role="alert" className="mt-4 flex items-start gap-2 rounded-md border border-[#da3633]/50 bg-[#da3633]/10 p-3 text-sm text-[#ff7b72]"><AlertCircle size={17} className="mt-0.5 shrink-0" /><div className="flex-1">{error}</div><button onClick={() => void importRepositories()} className="font-medium underline underline-offset-4">Retry</button></div>}
 
           <section className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-[#30363d] bg-[#0d1117] px-4 py-3">
             <Stat label="Repositories" value={repositories.length} icon={FolderGit2} />
@@ -255,7 +249,7 @@ export default function RepoPilotDashboard() {
               <label className="flex min-h-10 items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 text-sm text-[#8b949e]"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)} className="max-w-[190px] bg-transparent py-1 text-sm text-[#c9d1d9] outline-none" aria-label="Filter by status"><option>All projects</option>{STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}</select></label>
             </div>
 
-            {loading && repositories.length === 0 ? <div className="mt-4 flex items-center justify-center gap-3 rounded-md border border-[#30363d] px-6 py-16 text-sm text-[#8b949e]"><LoaderCircle className="animate-spin" size={18} />Fetching public repositories from GitHub…</div> : filteredRepositories.length > 0 ? (
+            {loading && repositories.length === 0 ? <div className="mt-4 flex items-center justify-center gap-3 rounded-md border border-[#30363d] px-6 py-16 text-sm text-[#8b949e]"><LoaderCircle className="animate-spin" size={18} />Loading your authorized GitHub repositories…</div> : filteredRepositories.length > 0 ? (
               <div className="mt-4 overflow-hidden rounded-md border border-[#30363d]">
                 {filteredRepositories.map((repository) => <article key={repository.id} className="border-b border-[#30363d] bg-[#0d1117] px-4 py-4 last:border-b-0 hover:bg-[#161b22]/70 sm:px-5">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -279,9 +273,9 @@ export default function RepoPilotDashboard() {
                   </div>
                 </article>)}
               </div>
-            ) : <div className="mt-4 rounded-md border border-dashed border-[#30363d] px-6 py-14 text-center"><Search size={23} className="mx-auto text-[#6e7681]" /><h3 className="mt-3 font-semibold">{repositories.length ? "No matching repositories" : "No repositories imported yet"}</h3><p className="mt-1 text-sm text-[#8b949e]">{repositories.length ? "Try another search term or clear the status filter." : "Enter a GitHub username above, or sign in to import your authorized repositories (including private repositories)."}</p><button onClick={() => { setQuery(""); setFilter("All projects"); }} className="mt-4 rounded-md border border-[#30363d] px-3 py-1.5 text-sm hover:bg-[#21262d]">Clear filters</button></div>}
+            ) : <div className="mt-4 rounded-md border border-dashed border-[#30363d] px-6 py-14 text-center"><Search size={23} className="mx-auto text-[#6e7681]" /><h3 className="mt-3 font-semibold">{repositories.length ? "No matching repositories" : "No repositories imported yet"}</h3><p className="mt-1 text-sm text-[#8b949e]">{repositories.length ? "Try another search term or clear the status filter." : githubUser ? "No repositories were returned for this GitHub account." : "Sign in with GitHub above. RepoPilot will automatically load the repositories your account can access."}</p>{repositories.length > 0 && <button onClick={() => { setQuery(""); setFilter("All projects"); }} className="mt-4 rounded-md border border-[#30363d] px-3 py-1.5 text-sm hover:bg-[#21262d]">Clear filters</button>}</div>}
           </section>
-          <footer className="mt-10 flex flex-col gap-2 border-t border-[#30363d] py-5 text-xs text-[#8b949e] sm:flex-row sm:items-center sm:justify-between"><span>RepoPilot · Ghost-Machine</span><span className="inline-flex items-center gap-1.5"><BookOpen size={13} />{lastSynced ? "Public GitHub data imported" : "Waiting for repository import"}</span></footer>
+          <footer className="mt-10 flex flex-col gap-2 border-t border-[#30363d] py-5 text-xs text-[#8b949e] sm:flex-row sm:items-center sm:justify-between"><span>RepoPilot · Ghost-Machine</span><span className="inline-flex items-center gap-1.5"><BookOpen size={13} />{lastSynced ? "GitHub repositories synchronized" : "Waiting for repository import"}</span></footer>
         </div>
       </main>
     </div>
