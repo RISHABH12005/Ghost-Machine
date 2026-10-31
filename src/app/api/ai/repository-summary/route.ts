@@ -22,6 +22,32 @@ type GitHubRepo = {
 type Issue = { number: number; title: string; state: string; html_url: string; pull_request?: unknown; labels?: Array<{ name: string }> };
 type Pull = { number: number; title: string; state: string; html_url: string; draft: boolean; updated_at: string };
 type Run = { name: string; status: string; conclusion: string | null; html_url: string; updated_at: string };
+type OllamaModel = { name?: string; model?: string };
+type OllamaTags = { models?: OllamaModel[] };
+
+async function selectOllamaModel(apiKey: string): Promise<string> {
+  const configured = process.env.OLLAMA_MODEL?.trim();
+  if (configured && configured.toLowerCase() !== "auto") return configured;
+
+  const response = await fetch("https://ollama.com/api/tags", {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error("Could not retrieve available Ollama Cloud models. Check the API key and account access.");
+  const catalog = await response.json() as OllamaTags;
+  const models = (catalog.models || []).map((item) => item.name || item.model).filter((name): name is string => Boolean(name));
+  if (!models.length) throw new Error("No Ollama Cloud models are available to this account.");
+
+  // Prefer capable general reasoning/coding models when available; otherwise use
+  // the first model returned by Ollama's live account catalog.
+  const preferences = ["qwen3.5", "qwen3", "deepseek", "gpt-oss", "glm", "gemma4", "llama"];
+  for (const family of preferences) {
+    const match = models.find((name) => name.toLowerCase().includes(family));
+    if (match) return match;
+  }
+  return models[0];
+}
 
 async function githubGet<T>(url: string, token: string): Promise<T> {
   const response = await fetch(url, {
@@ -59,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     const issueItems = issues.filter((item) => !item.pull_request).map(({ number, title, html_url, labels }) => ({ number, title, url: html_url, labels: labels?.map((label) => label.name) || [] }));
     const runItems = runs.workflow_runs.map(({ name, status, conclusion, html_url, updated_at }) => ({ name, status, conclusion, url: html_url, updatedAt: updated_at }));
-    const model = process.env.OLLAMA_MODEL || "glm-5.3";
+    const model = await selectOllamaModel(apiKey);
     const prompt = [
       "You are RepoPilot, a precise software project analyst.",
       "Analyze only the supplied GitHub metadata. Do not claim to have inspected source code, secrets, security alerts, or files.",
