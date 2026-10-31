@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2, ChevronDown,
-  CircleHelp, CircleDot, Clock3, Code2, ExternalLink, Filter, FolderGit2,
+  CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu,
   RefreshCw, Search, Settings2, ShieldAlert, Sparkles, Star, X, Zap,
 } from "lucide-react";
@@ -252,11 +252,6 @@ export default function RepoPilotDashboard() {
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {mobileMenuOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-[#30363d] bg-[#0d1117] px-3 py-4 transition-transform lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex items-center gap-2.5 px-2 pb-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f0f6fc] text-[#0d1117]"><Github size={23} /></div>
-          <div className="min-w-0 flex-1"><p className="text-sm font-semibold tracking-tight text-[#f0f6fc]">RepoPilot</p><p className="text-xs text-[#8b949e]">Your repository workspace</p></div>
-          <button className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
-        </div>
         <div className="border-b border-[#30363d] px-2 pb-4">
           <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 py-2 text-left text-sm hover:border-[#8b949e]"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#30363d] text-[10px] font-semibold">{username.slice(0,2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate">{username}</span><ChevronDown size={14} className="text-[#8b949e]" /></button>
         </div>
@@ -269,10 +264,6 @@ export default function RepoPilotDashboard() {
           <button onClick={() => navigateTo("Activity history")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]"><Activity size={16} className="text-[#8b949e]" />Activity history</button>
           <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]"><Settings2 size={16} className="text-[#8b949e]" />Settings</button>
         </nav>
-        <div className="mt-auto border-t border-[#30363d] pt-4">
-          <div className="rounded-md border border-[#30363d] bg-[#161b22] p-3"><div className="flex items-center gap-2 text-sm font-medium"><Code2 size={15} className="text-[#8b949e]" />AI project memory</div><p className="mt-2 text-xs leading-5 text-[#8b949e]">Repository summaries and next-step suggestions are planned for a future update.</p><span className="mt-2 inline-flex rounded-full border border-[#30363d] px-2 py-0.5 text-[10px] text-[#8b949e]">Coming later</span></div>
-          <div className="mt-3 flex items-center gap-2 px-1 text-xs text-[#8b949e]"><span className={`h-2 w-2 rounded-full ${githubUser ? "bg-[#3fb950]" : "bg-[#d29922]"}`} />{githubUser ? "GitHub connected · authorized repositories" : "Public repository mode · sign in for private repos"}</div>
-        </div>
       </aside>
 
       <main className="min-h-screen lg:pl-[260px]">
@@ -283,7 +274,6 @@ export default function RepoPilotDashboard() {
             <span className="truncate text-sm font-semibold sm:hidden">RepoPilot / {activeNav}</span>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <button title="Help" aria-label="Help" onClick={() => setActivePanel("help")} className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><CircleHelp size={17} /></button>
             <button title="Notifications" aria-label="Notifications" onClick={() => setActivePanel("notifications")} className="relative rounded-md p-2 text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]"><Bell size={17} />{attentionCount > 0 && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#e3b341]" />}</button>
             <a href="/api/auth/github" className="ml-1 inline-flex items-center gap-2 rounded-md border border-[#238636] bg-[#238636] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#2ea043] sm:px-3 sm:text-sm"><Github size={15} /><span>{githubUser ? `@${githubUser.login}` : "Sign in with GitHub"}</span></a>{githubUser && <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); setGithubUser(null); setRepositories([]); setUsername(""); }} className="rounded-md border border-[#30363d] px-2.5 py-1.5 text-xs hover:bg-[#21262d]">Sign out</button>}<a href={`https://github.com/${username}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-2.5 py-1.5 text-xs hover:border-[#8b949e]"><span className="hidden sm:inline">View profile</span><ExternalLink size={12} /></a>
           </div>
@@ -315,7 +305,6 @@ export default function RepoPilotDashboard() {
           <section id="repositories" className="mt-7 scroll-mt-24">
             <div className="flex flex-col justify-between gap-3 border-b border-[#30363d] pb-4 sm:flex-row sm:items-center">
               <div><h2 className="text-lg font-semibold">Repositories <span className="ml-1 rounded-full bg-[#21262d] px-2 py-0.5 text-sm font-normal text-[#8b949e]">{filteredRepositories.length}</span></h2><p className="mt-1 text-xs text-[#8b949e]">{githubUser ? "Authorized repositories for " : "Public repositories from "}<a className="text-[#58a6ff] hover:underline" href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer">@{username}</a>{lastSynced ? ` · synced ${lastSynced}` : ""}</p></div>
-              <a href={`https://github.com/${username}?tab=repositories`} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-md border border-[#30363d] bg-[#21262d] px-3 text-sm hover:border-[#8b949e] sm:self-auto">View on GitHub <ExternalLink size={13} /></a>
             </div>
             <div className="mt-4 flex flex-col gap-3 rounded-md border border-[#30363d] bg-[#0d1117] p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
