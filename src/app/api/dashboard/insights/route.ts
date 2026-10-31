@@ -98,6 +98,40 @@ export async function GET(request: NextRequest) {
     const achievementsHtml = profileResponse?.ok ? await profileResponse.text() : "";
     const achievements = extractAchievements(achievementsHtml);
 
+    const quarters = [0, 1, 2, 3].map((quarter) => {
+      const startMonth = quarter * 3;
+      const startDate = new Date(Date.UTC(year, startMonth, 1));
+      const endDate = new Date(Date.UTC(year, startMonth + 3, 0));
+      const boundedEnd = endDate > to ? to : endDate;
+      return { quarter: `Q${quarter + 1}`, from: startDate, to: boundedEnd, active: startDate <= to };
+    });
+    const searchCount = async (kind: "commits" | "pullRequests" | "issues", quarter: typeof quarters[number]) => {
+      if (!quarter.active) return 0;
+      const fromDate = quarter.from.toISOString().slice(0, 10);
+      const toDate = quarter.to.toISOString().slice(0, 10);
+      const query = kind === "commits"
+        ? `author:${session.login} committer-date:${fromDate}..${toDate}`
+        : kind === "pullRequests"
+          ? `author:${session.login} is:pr created:${fromDate}..${toDate}`
+          : `author:${session.login} is:issue -is:pr created:${fromDate}..${toDate}`;
+      const endpoint = kind === "commits" ? "commits" : "issues";
+      const response = await fetch(`https://api.github.com/search/${endpoint}?q=${encodeURIComponent(query)}&per_page=1`, {
+        headers: headers(session.accessToken), cache: "no-store", signal: AbortSignal.timeout(12000),
+      });
+      if (!response.ok) throw new Error(`GitHub could not load ${kind} activity for ${quarter.quarter}.`);
+      const result = await response.json() as { total_count?: number };
+      return result.total_count || 0;
+    };
+    const activitySeries = await Promise.all(quarters.map(async (quarter) => ({
+      quarter: quarter.quarter,
+      contributions: calendar.weeks.flatMap((week) => week.contributionDays)
+        .filter((day) => day.date >= quarter.from.toISOString().slice(0, 10) && day.date <= quarter.to.toISOString().slice(0, 10))
+        .reduce((sum, day) => sum + day.contributionCount, 0),
+      commits: await searchCount("commits", quarter),
+      pullRequests: await searchCount("pullRequests", quarter),
+      issues: await searchCount("issues", quarter),
+    })));
+
     return NextResponse.json({
       year, currentYear, from: from.toISOString(), to: to.toISOString(),
       totalContributions: calendar.totalContributions,
@@ -108,6 +142,7 @@ export async function GET(request: NextRequest) {
       organizations,
       achievements,
       achievementsAvailable: achievements.length > 0,
+      activitySeries,
       syncedAt: new Date().toISOString(),
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
