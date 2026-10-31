@@ -125,7 +125,7 @@ export default function RepoPilotDashboard() {
           const parsed = JSON.parse(savedOrganization) as AiOrganization;
           if (Array.isArray(parsed.projects)) { setAiOrganization(parsed); setOrganizationMode("ai"); }
         } else { setAiOrganization(null); setOrganizationMode("manual"); }
-        setSidebarCollapsed(localStorage.getItem(`repopilot-sidebar-collapsed:${data.username.toLowerCase()}`) === "true");
+        setSidebarCollapsed(false); // Always open the navigation by default for a clearer first-time experience.
         setAiSidebarOpen(localStorage.getItem(`repopilot-ai-sidebar:${data.username.toLowerCase()}`) === "true");
       } catch { /* Keep safe defaults if saved preferences are malformed. */ }
       setLastSynced(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
