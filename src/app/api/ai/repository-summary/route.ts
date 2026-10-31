@@ -41,7 +41,7 @@ async function selectOllamaModel(apiKey: string): Promise<string> {
 
   // Prefer capable general reasoning/coding models when available; otherwise use
   // the first model returned by Ollama's live account catalog.
-  const preferences = ["qwen3.5", "qwen3", "deepseek", "gpt-oss", "glm", "gemma4", "llama"];
+  const preferences = ["gemma4:31b-cloud", "gemma4", "qwen3.5", "qwen3", "deepseek", "gpt-oss", "glm", "llama"];
   for (const family of preferences) {
     const match = models.find((name) => name.toLowerCase().includes(family));
     if (match) return match;
@@ -107,13 +107,24 @@ export async function POST(request: NextRequest) {
       }),
     ].join("\n");
 
-    const response = await fetch("https://ollama.com/api/chat", {
+    let response = await fetch("https://ollama.com/api/chat", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], stream: false }),
       cache: "no-store",
       signal: AbortSignal.timeout(60000),
     });
+    let activeModel = model;
+    if (response.status === 402 && !model.toLowerCase().includes("gemma4:31b-cloud")) {
+      activeModel = "gemma4:31b-cloud";
+      response = await fetch("https://ollama.com/api/chat", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ model: activeModel, messages: [{ role: "user", content: prompt }], stream: false }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(60000),
+      });
+    }
     if (response.status === 401 || response.status === 403) return NextResponse.json({ error: "Ollama Cloud rejected the API key. Check OLLAMA_API_KEY in Render." }, { status: 502 });
     if (response.status === 429) return NextResponse.json({ error: "Ollama Cloud rate or usage limit reached. Check your Ollama account usage." }, { status: 429 });
     if (!response.ok) {
@@ -123,7 +134,7 @@ export async function POST(request: NextRequest) {
     const result = await response.json() as { message?: { content?: string }; model?: string };
     const summary = result.message?.content?.trim();
     if (!summary) return NextResponse.json({ error: "Ollama Cloud returned an empty analysis." }, { status: 502 });
-    return NextResponse.json({ summary, model: result.model || model, generatedAt: new Date().toISOString(), source: "GitHub repository metadata, open issues, pull requests, and recent workflow runs" }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ summary, model: result.model || activeModel, generatedAt: new Date().toISOString(), source: "GitHub repository metadata, open issues, pull requests, and recent workflow runs" }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI analysis failed.";
     return NextResponse.json({ error: message.includes("timed out") ? "The GitHub or Ollama request timed out. Try again." : message }, { status: 502 });
