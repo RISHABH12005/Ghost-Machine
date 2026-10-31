@@ -1,4 +1,4 @@
-import { Github, ShieldCheck, Sparkles, ChartNoAxesCombined } from "lucide-react";
+import { Github, ShieldCheck, Sparkles, BarChart3 } from "lucide-react";
 
 export default function LoginPage() {
   return (
@@ -17,7 +17,7 @@ export default function LoginPage() {
         <a href="/api/auth/github" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#238636] px-4 text-sm font-semibold text-white transition hover:bg-[#2ea043]"><Github size={18} /> Continue with GitHub</a>
         <div className="mt-7 grid grid-cols-3 gap-3">
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-3 text-center"><ShieldCheck className="mx-auto text-[#3fb950]" size={18}/><p className="mt-2 text-xs text-[#8b949e]">Private access</p></div>
-          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-3 text-center"><ChartNoAxesCombined className="mx-auto text-[#79c0ff]" size={18}/><p className="mt-2 text-xs text-[#8b949e]">Project insights</p></div>
+          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-3 text-center"><BarChart3 className="mx-auto text-[#79c0ff]" size={18}/><p className="mt-2 text-xs text-[#8b949e]">Project insights</p></div>
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-3 text-center"><Sparkles className="mx-auto text-[#d2a8ff]" size={18}/><p className="mt-2 text-xs text-[#8b949e]">AI suggestions</p></div>
         </div>
         <p className="mt-7 text-center text-xs leading-5 text-[#6e7681]">RepoPilot uses GitHub OAuth. Your GitHub password is never shared with this app.</p>
