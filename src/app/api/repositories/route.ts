@@ -18,19 +18,18 @@ function rateLimitResponse(response: Response) {
     : reset > 0 ? new Date(reset * 1000).toISOString() : null;
   const remaining = response.headers.get("x-ratelimit-remaining");
   return NextResponse.json({
-    error: "GitHub API rate limit reached. Connect your GitHub account to use your authenticated API quota, or retry after the reset.",
+    error: "GitHub API rate limit reached. Your authenticated GitHub API quota is exhausted. Retry after the reset.",
     rateLimit: { remaining, retryAt },
   }, { status: 429, headers: retryAt ? { "Retry-After": String(Math.max(1, Math.ceil((new Date(retryAt).getTime() - Date.now()) / 1000))) } : {} });
 }
 
 export async function GET(request: NextRequest) {
-  const username = (request.nextUrl.searchParams.get("username") || "").trim();
-  if (!/^[a-zA-Z0-9-]{1,39}$/.test(username)) {
-    return NextResponse.json({ error: "Enter a valid GitHub username." }, { status: 400 });
-  }
-
   const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
-  const useAuthenticatedRepos = Boolean(session && session.login.toLowerCase() === username.toLowerCase());
+  if (!session) {
+    return NextResponse.json({ error: "Sign in with GitHub to load your repositories." }, { status: 401 });
+  }
+  const username = session.login;
+  const useAuthenticatedRepos = true;
   const allRepositories: GitHubRepository[] = [];
 
   try {
