@@ -78,7 +78,7 @@ export default function RepoPilotDashboard() {
   const [contributionDays, setContributionDays] = useState<Array<{ date: string; contributionCount: number; contributionLevel: string }>>([]);
   const [totalContributions, setTotalContributions] = useState(0);
   const [contributionError, setContributionError] = useState("");
-  const [visibleStatusSeries, setVisibleStatusSeries] = useState<ProjectStatus[]>(STATUS_OPTIONS);
+  const [selectedStatusChart, setSelectedStatusChart] = useState<ProjectStatus | null>(null);
 
   const navigateTo = (label: string) => {
     const routes: Record<string, string> = {
@@ -365,6 +365,13 @@ export default function RepoPilotDashboard() {
     const p = trendPoint(index, point.value);
     return `${index === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
   }).join(" ");
+  const trendAreaPath = (points: Array<{date: Date; value: number}>) => {
+    const line = points.map((point, index) => {
+      const p = trendPoint(index, point.value);
+      return `${index === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    }).join(" ");
+    return `${line} L 750 190 L 46 190 Z`;
+  };
   const contributionLine = useMemo(() => {
     if (contributionDays.length < 2) return "";
     const max = Math.max(1, ...contributionDays.map((day) => day.contributionCount));
@@ -473,19 +480,32 @@ export default function RepoPilotDashboard() {
                 <span className="text-xs text-[#8b949e]">{repositories.length} repositories</span>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {statusCounts.map(({status,count}) => <button key={status} type="button" aria-pressed={visibleStatusSeries.includes(status)} onClick={() => setVisibleStatusSeries((current) => current.includes(status) ? current.filter((item) => item !== status) : [...current, status])} title={`${status}: ${count} repositories currently`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-opacity ${visibleStatusSeries.includes(status) ? "border-[#484f58] bg-[#161b22] text-[#e6edf3]" : "border-[#30363d] text-[#6e7681] opacity-50"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:statusColors[status]}} />{status}<span className="font-semibold tabular-nums">{count}</span></button>)}
+                {statusCounts.map(({status,count}) => <button key={status} type="button" aria-pressed={selectedStatusChart === status} onClick={() => setSelectedStatusChart((current) => current === status ? null : status)} title={`Open ${status} area chart · ${count} repositories currently`} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${selectedStatusChart === status ? "border-[#8b949e] bg-[#21262d] text-white" : "border-[#30363d] bg-[#0d1117] text-[#c9d1d9] hover:bg-[#161b22]"}`}><span className="h-2 w-2 rounded-full" style={{backgroundColor:statusColors[status]}} />{status}<span className="font-semibold tabular-nums">{count}</span></button>)}
               </div>
-              <div className="mt-4 overflow-x-auto">
-                <svg viewBox="0 0 780 230" role="img" aria-label="Interactive line chart showing cumulative repository counts by current status over the last six months" className="min-w-[560px] w-full">
-                  {[30,70,110,150,190].map((y,index) => <g key={y}><line x1="46" x2="750" y1={y} y2={y} stroke="#30363d" strokeDasharray="3 5"/><text x="36" y={y+4} textAnchor="end" fill="#8b949e" fontSize="10">{Math.round(statusTrendMax * (4-index) / 4)}</text></g>)}
-                  {statusTrend.series.filter((series) => visibleStatusSeries.includes(series.status)).map((series) => <g key={series.status}>
-                    <path d={trendPath(series.points)} fill="none" stroke={statusColors[series.status]} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                    {series.points.map((point,index) => { const p=trendPoint(index,point.value); return <circle key={index} cx={p.x} cy={p.y} r="3.2" fill={statusColors[series.status]} stroke="#0d1117" strokeWidth="1.2"><title>{series.status} · week of {point.date.toLocaleDateString()} · {point.value} repositories</title></circle>; })}
-                  </g>)}
-                  {[0,6,13,19,26].map((index) => <text key={index} x={trendPoint(index,0).x} y="215" textAnchor="middle" fill="#8b949e" fontSize="10">{statusTrend.weeks[index].toLocaleDateString(undefined,{month:"short",day:"numeric"})}</text>)}
-                </svg>
-              </div>
-              <p className="mt-2 text-[11px] leading-5 text-[#8b949e]">Select a status above to show or hide its line. Hover over a point to see its week and repository count. Historical points are estimated from each repository's latest GitHub push date and its current status; past status snapshots are not available yet.</p>
+              {selectedStatusChart ? (() => {
+                const series = statusTrend.series.find((item) => item.status === selectedStatusChart);
+                if (!series) return null;
+                const latest = series.points[series.points.length - 1]?.value || 0;
+                const first = series.points[0]?.value || 0;
+                const change = latest - first;
+                return <div className="mt-5 rounded-lg border border-[#30363d] bg-[#010409] p-3 sm:p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{backgroundColor:statusColors[selectedStatusChart]}}/><h3 className="font-semibold">{selectedStatusChart}</h3></div><p className="mt-1 text-xs text-[#8b949e]">Separate area chart · last 6 months</p></div>
+                    <div className="text-right"><p className="text-2xl font-semibold tabular-nums">{statusCounts.find((item) => item.status === selectedStatusChart)?.count || 0}</p><p className="text-[11px] text-[#8b949e]">Current repositories</p></div>
+                  </div>
+                  <div className="mt-3 overflow-x-auto">
+                    <svg viewBox="0 0 780 230" role="img" aria-label={`${selectedStatusChart} area chart over the last six months`} className="min-w-[560px] w-full">
+                      {[30,70,110,150,190].map((y,index) => <g key={y}><line x1="46" x2="750" y1={y} y2={y} stroke="#30363d" strokeDasharray="3 5"/><text x="36" y={y+4} textAnchor="end" fill="#8b949e" fontSize="10">{Math.round(statusTrendMax * (4-index) / 4)}</text></g>)}
+                      <path d={trendAreaPath(series.points)} fill={statusColors[selectedStatusChart]} opacity="0.22"/>
+                      <path d={trendPath(series.points)} fill="none" stroke={statusColors[selectedStatusChart]} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      {series.points.map((point,index) => { const p=trendPoint(index,point.value); return <circle key={index} cx={p.x} cy={p.y} r="4" fill={statusColors[selectedStatusChart]} stroke="#010409" strokeWidth="1.5"><title>{selectedStatusChart} · week of {point.date.toLocaleDateString()} · {point.value} repositories</title></circle>; })}
+                      {[0,6,13,19,26].map((index) => <text key={index} x={trendPoint(index,0).x} y="215" textAnchor="middle" fill="#8b949e" fontSize="10">{statusTrend.weeks[index].toLocaleDateString(undefined,{month:"short",day:"numeric"})}</text>)}
+                    </svg>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-[#8b949e]">Hover over a point to see its week and repository count. Change over the displayed period: {change >= 0 ? "+" : ""}{change}. Historical values are estimates based on repository update dates and current statuses, not recorded past status snapshots.</p>
+                  <button type="button" onClick={() => setSelectedStatusChart(null)} className="mt-3 rounded-md border border-[#30363d] px-3 py-1.5 text-xs text-[#c9d1d9] hover:bg-[#161b22]">Close chart</button>
+                </div>;
+              })() : <p className="mt-4 rounded-md border border-dashed border-[#30363d] p-4 text-center text-xs text-[#8b949e]">Select a status button to open its separate area chart.</p>}
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#30363d] pt-4">
                 <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Active on GitHub</p><p className="mt-1 text-xl font-semibold text-[#3fb950]">{activeOnGitHubCount}</p><p className="text-[11px] text-[#6e7681]">Pushed in the last 30 days</p></div>
                 <div className="rounded-md bg-[#161b22] p-3"><p className="text-xs text-[#8b949e]">Contribution count</p><p className="mt-1 text-xl font-semibold text-[#79c0ff]">{totalContributions.toLocaleString()}</p><p className="text-[11px] text-[#6e7681]">Last 12 months</p></div>
