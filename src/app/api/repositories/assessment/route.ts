@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { openSession, SESSION_COOKIE } from "@/lib/github-session";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +33,11 @@ const headers = {
   "User-Agent": "RepoPilot-Ghost-Machine",
 };
 
-async function githubGet<T>(url: string): Promise<T | null> {
+async function githubGet<T>(url: string, accessToken?: string): Promise<T | null> {
   let response: Response;
   try {
     response = await fetch(url, {
-      headers,
+      headers: { ...headers, ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
@@ -64,13 +65,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
+    const accessToken = session?.login.toLowerCase() === owner.toLowerCase() ? session.accessToken : undefined;
     const root = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
-    const repository = await githubGet<GitHubRepo>(root);
+    const repository = await githubGet<GitHubRepo>(root, accessToken);
     if (!repository) return NextResponse.json({ error: "Public repository not found." }, { status: 404 });
 
     const [pulls, runs] = await Promise.all([
-      githubGet<PullRequest[]>(`${root}/pulls?state=open&per_page=10`),
-      githubGet<{ workflow_runs: WorkflowRun[] }>(`${root}/actions/runs?per_page=10`),
+      githubGet<PullRequest[]>(`${root}/pulls?state=open&per_page=10`, accessToken),
+      githubGet<{ workflow_runs: WorkflowRun[] }>(`${root}/actions/runs?per_page=10`, accessToken),
     ]);
     const evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }> = [];
     const failedRun = runs?.workflow_runs?.find((run) => run.conclusion === "failure");
