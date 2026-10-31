@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2, ChevronDown,
+  Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu,
   Search, Settings2, ShieldAlert, Sparkles, Star, X, Zap, PanelRightOpen, PanelRightClose,
