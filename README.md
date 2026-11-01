@@ -1,177 +1,66 @@
-# RepoPilot
+# Ghost Machine (RepoPilot) — AI-Powered GitHub Repository Intelligence
 
-RepoPilot is a GitHub repository workspace that helps developers review project activity, track work, and decide what to do next.
+*This is a submission for the [Hacktoberfest Open-Source AI Challenge Week 4: Ghost in the Machine](https://dev.to/challenges/hacktoberfest-week4-2026-10-26).*
 
-It connects to GitHub, imports repositories that the signed-in account can access, and combines repository metadata with optional AI assistance from Ollama Cloud.
+## What I Built
 
-## Features
+I built **Ghost Machine (RepoPilot)**, an AI-powered GitHub repository assessment and management platform.
 
-- **GitHub sign-in:** OAuth authentication and access to repositories authorized for the connected account, including private repositories.
-- **Repository discovery:** Import public repositories by username or load the connected account's repositories.
-- **Repository search:** Search by repository name, description, language, and topics.
-- **Project tracking:** Assign statuses such as Not assessed, Needs review, In progress, Needs attention, Completed, and On hold.
-- **Repository assessment:** Review heuristic signals from archive state, open pull requests, requested reviewers, workflow runs, and push activity. Suggestions are not applied automatically.
-- **AI summaries and chat:** Ask repository-aware questions and generate summaries using Ollama Cloud. AI requests use GitHub metadata, open issues and pull requests, recent workflow data, and the README where available; source files and secrets are not sent.
-- **Activity and insights:** Review workspace activity and GitHub contribution/insight data.
-- **Local workspace preferences:** Store project status and workspace usage preferences in the browser.
-- **Responsive dark interface:** Dashboard, repository list, work board, priorities, activity, and settings views.
+Managing multiple GitHub repositories can become difficult. It is easy to overlook failed workflows, unresolved issues, inactive projects and maintenance problems.
 
-## Technology
+RepoPilot helps developers understand the health of their repositories without manually checking every detail.
 
-| Area | Technology |
-|---|---|
-| Application | Next.js App Router, React |
-| Language | TypeScript |
-| Styling | Tailwind CSS |
-| Icons | Lucide React |
-| GitHub integration | GitHub REST API and OAuth |
-| AI | Ollama Cloud chat API |
-| Validation | GitHub Actions, ESLint, TypeScript, npm audit |
+Key features include:
 
-## Requirements
+- **GitHub Integration:** Connect your GitHub account and import repositories.
+- **Repository Assessment:** Evaluate repository health using available GitHub activity and workflow information.
+- **AI-Powered Summaries:** Generate understandable project overviews, identify risks and receive recommended next steps.
+- **Project Management:** Organize repositories by status, including In Progress, Needs Attention, Completed and On Hold.
+- **Actionable Insights:** Highlight failed workflows, maintenance concerns and other important signals.
 
-- Node.js 22 or later
-- npm
+I interpreted the Ghost in the Machine theme as giving developers an intelligent assistant that works behind the scenes, examining repository activity and bringing hidden problems to their attention.
 
-## Run locally
+## Demo
 
-1. Clone the repository and enter the project directory:
+**Live Application:** [https://repopilot-9tal.onrender.com](https://repopilot-9tal.onrender.com)
 
-   ```bash
-   git clone https://github.com/RISHABH12005/Ghost-Machine.git
-   cd Ghost-Machine
-   ```
+## Code
 
-2. Install dependencies:
+**GitHub Repository:** [https://github.com/RISHABH12005/Ghost-Machine](https://github.com/RISHABH12005/Ghost-Machine)
 
-   ```bash
-   npm ci
-   ```
+The project is open source. You can explore the implementation, inspect the API routes and contribute improvements.
 
-3. Create your local environment file:
+## How I Built It
 
-   ```bash
-   cp .env.example .env.local
-   ```
+I built RepoPilot using a modern web application stack:
 
-4. Add the configuration values described below, then start the development server:
+- **Next.js and React** for the application and user interface.
+- **TypeScript** for type-safe development.
+- **Tailwind CSS** for responsive styling.
+- **GitHub API and GraphQL API** for repository information, contributions, issues, pull requests and workflow activity.
+- **Ollama Cloud** for AI-powered repository analysis.
+- **Gemma 4 (31B)** as the model used for generating repository summaries in the demonstrated configuration.
 
-   ```bash
-   npm run dev
-   ```
+The application collects relevant GitHub metadata and sends it to the Ollama Cloud model for analysis. The model generates project overviews, identifies potential risks and recommends actions.
 
-5. Open [http://localhost:3000](http://localhost:3000).
+An important design decision is that repository summaries use GitHub metadata rather than sending entire source-code repositories to the model.
 
-On Windows PowerShell, create the environment file with:
+This makes the analysis focused on repository activity, maintenance and project health.
 
-```powershell
-Copy-Item .env.example .env.local
-```
+## Why Does Open Innovation Matter?
 
-## Environment variables
+Open innovation makes it possible for developers to experiment with open-weight AI models and build useful applications without depending entirely on closed AI APIs.
 
-| Variable | Required | Purpose |
-|---|---:|---|
-| `GITHUB_CLIENT_ID` | Yes | GitHub OAuth application client ID |
-| `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth application client secret |
-| `GITHUB_REDIRECT_URI` | Yes | Exact OAuth callback URL |
-| `AUTH_SECRET` | Yes | Secret used to encrypt the session cookie |
-| `OLLAMA_API_KEY` | For AI features | Server-side Ollama Cloud API key |
-| `OLLAMA_MODEL` | No | Ollama Cloud model; defaults to `glm-5.3` |
-| `DATABASE_URL` | No | Reserved for a future database-backed implementation |
+Using Ollama gave me flexibility in selecting and changing models while keeping the AI integration separate from the main application.
 
-Register this callback URL in your GitHub OAuth App:
+It also makes the architecture adaptable to different inference environments, including local model deployments and other compatible model providers.
 
-```text
-http://localhost:3000/api/auth/callback
-```
+Most importantly, open-source tools allowed me to build, modify and share a practical AI-powered developer tool while keeping the project accessible to other contributors.
 
-For the deployed Render service, use:
+## The Spirit of It
 
-```text
-https://repopilot-9tal.onrender.com/api/auth/callback
-```
+A repository can look perfectly fine at first glance while hiding failed workflows, maintenance problems and important unfinished work.
 
-Generate a strong session secret with:
+I wanted to build something that could look beyond the repository's name and description, examine its activity and reveal what actually needs attention.
 
-```bash
-openssl rand -base64 32
-```
-
-The OAuth integration requests `read:user` and `repo` scopes. GitHub's `repo` scope is broad; authorize only an account you trust. Keep all credentials in `.env.local` or your hosting provider's secret environment settings. Never commit real keys or tokens.
-
-## Project structure
-
-```text
-Ghost-Machine/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                 # CI, build, smoke tests, dependency audit
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── ai/                # AI chat, summaries, repository organization
-│   │   │   ├── auth/              # GitHub OAuth, callback, session, logout
-│   │   │   ├── dashboard/         # Contribution and insight endpoints
-│   │   │   └── repositories/      # Repository import and assessment
-│   │   ├── activity/              # Activity route
-│   │   ├── dashboard/             # Dashboard route
-│   │   ├── priorities/            # Priority-filtered route
-│   │   ├── repositories/           # Repository route
-│   │   ├── settings/               # Settings route
-│   │   ├── work-board/             # In-progress route
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx                # Login / entry route
-│   ├── components/
-│   │   ├── login-page.tsx
-│   │   ├── repo-pilot-dashboard.tsx
-│   │   └── workspace-route.tsx
-│   ├── lib/
-│   │   └── github-session.ts       # Encrypted session handling
-│   └── types/
-│       └── repository.ts
-├── .env.example
-├── eslint.config.mjs
-├── next.config.ts
-├── package.json
-├── package-lock.json
-├── postcss.config.mjs
-├── tailwind.config.ts
-├── tsconfig.json
-├── LICENSE
-└── README.md
-```
-
-The route page files intentionally remain separate because Next.js uses them as URL entry points. Shared workspace authentication and rendering are centralized in `src/components/workspace-route.tsx`; the dashboard implementation lives in `src/components/repo-pilot-dashboard.tsx`.
-
-## Scripts and checks
-
-```bash
-npm run dev        # Start local development
-npm run typecheck  # Run TypeScript checks
-npm run lint       # Run ESLint
-npm run build      # Create a production build
-npm run start      # Start the production server
-npm audit          # Review dependency advisories
-```
-
-The GitHub Actions workflow installs the locked dependencies, runs type-checking, linting and a production build, smoke-tests the production server and key security headers, then audits dependencies for high or critical vulnerabilities.
-
-## Deployment
-
-The project is configured for a Node.js deployment such as Render. Set the environment variables in the hosting dashboard, use `npm ci` for installation and `npm run build` for the build command. Start the app with `npm run start`. The production OAuth callback must exactly match the value registered in the GitHub OAuth App.
-
-## Data handling and limitations
-
-- Without authentication, repository discovery is limited to public repositories.
-- After GitHub OAuth, the app can read repository metadata available to the authorized account.
-- Project statuses and selected workspace preferences are stored in browser local storage; they are not synchronized across devices.
-- Repository assessments are heuristic indicators based on available GitHub metadata. They are not definitive judgments about project health.
-- AI features transmit the supported repository context to Ollama Cloud. Do not enable AI analysis for repositories whose metadata or activity must not be sent to that service.
-- A repository being inactive does not prove it is abandoned or complete. Review evidence and make status decisions yourself.
-- PostgreSQL-backed synchronization and semantic search are not implemented yet.
-
-## License
-
-See [LICENSE](LICENSE).
+**RepoPilot gives those hidden signals a voice.**
