@@ -143,7 +143,6 @@ export default function RepoPilotDashboard() {
   const [aiChatSending, setAiChatSending] = useState(false);
   const [aiChatError, setAiChatError] = useState("");
   const [aiUsage, setAiUsage] = useState({ total: 0, chats: 0, summaries: 0, organization: 0 });
-  const [contributionYear] = useState(new Date().getFullYear());
 
 
   useEffect(() => {
@@ -486,21 +485,6 @@ export default function RepoPilotDashboard() {
   const isSettingsPage = pathname === "/settings";
 
 
-  useEffect(() => {
-    if (!githubUser || !isOverviewPage) return;
-    let active = true;
-    setContributionLoading(true);
-    setContributionError("");
-    fetch(`/api/dashboard/contributions?year=${contributionYear}`, { cache: "no-store" })
-      .then(async (response) => {
-        const result = await response.json() as { totalContributions?: number; weeks?: Array<{ contributionDays: Array<{ date: string; contributionCount: number; contributionLevel: string }> }>; error?: string };
-        if (!response.ok) throw new Error(result.error || "Could not load contribution calendar.");
-        if (active) setContributionCalendar({ totalContributions: result.totalContributions || 0, weeks: result.weeks || [] });
-      })
-      .catch((error) => { if (active) setContributionError(error instanceof Error ? error.message : "Could not load contribution calendar."); })
-      .finally(() => { if (active) setContributionLoading(false); });
-    return () => { active = false; };
-  }, [githubUser, contributionYear, isOverviewPage]);
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
