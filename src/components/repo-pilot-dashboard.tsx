@@ -140,6 +140,8 @@ export default function RepoPilotDashboard() {
   const [aiChatWidth, setAiChatWidth] = useState(460);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [aiChatRepositoryId, setAiChatRepositoryId] = useState<number | null>(null);
+  const [aiRepoPickerOpen, setAiRepoPickerOpen] = useState(false);
+  const [aiRepoSearch, setAiRepoSearch] = useState("");
   const [aiChatMessages, setAiChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatSending, setAiChatSending] = useState(false);
@@ -372,7 +374,7 @@ export default function RepoPilotDashboard() {
 
   const sendAiChatMessage = async () => {
     const message = aiChatInput.trim();
-    const selectedRepository = repositories.find((item) => item.id === aiChatRepositoryId) || repositories[0];
+    const selectedRepository = aiChatRepositories.find((item) => item.id === aiChatRepositoryId) || aiChatRepositories[0];
     if (!message || !selectedRepository || aiChatSending) return;
     const nextMessages = [...aiChatMessages, { role: "user" as const, content: message }];
     setAiChatMessages(nextMessages);
@@ -423,6 +425,16 @@ export default function RepoPilotDashboard() {
     setRepositories(updated);
     try { localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status])))); } catch { /* Status still updates for this session. */ }
   };
+
+  const aiChatRepositories = useMemo(
+    () => repositories.filter((repository) => repository.fullName.split("/")[0]?.toLowerCase() === username.toLowerCase()),
+    [repositories, username],
+  );
+  const selectedAiRepository = aiChatRepositories.find((repository) => repository.id === aiChatRepositoryId) || aiChatRepositories[0] || null;
+  const matchingAiRepositories = useMemo(() => {
+    const search = aiRepoSearch.trim().toLowerCase();
+    return aiChatRepositories.filter((repository) => !search || repository.fullName.toLowerCase().includes(search));
+  }, [aiChatRepositories, aiRepoSearch]);
 
   const filteredRepositories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -535,19 +547,37 @@ export default function RepoPilotDashboard() {
                 <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#8957e5]/40 bg-[#8957e5]/10 text-[#d2a8ff]"><Sparkles size={18}/></span><div><h2 className="text-base font-semibold text-[#f0f6fc]">AI Talk</h2><p className="text-xs text-[#8b949e]">Ask questions about a GitHub repository</p></div></div>
                 <button onClick={() => pathname === "/ai-talk" ? router.push("/dashboard") : toggleAiSidebar()} aria-label={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} title={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} className="inline-flex items-center gap-2 rounded-md border border-[#30363d] px-3 py-2 text-sm text-[#c9d1d9] hover:bg-[#21262d]">{pathname === "/ai-talk" ? <><ArrowLeft size={16}/>Back to dashboard</> : <X size={17}/>}</button>
               </div>
-              <label className="mt-4 block text-xs font-medium text-[#8b949e]">Selected repository</label>
-              <select value={aiChatRepositoryId ?? repositories[0]?.id ?? ""} onChange={(event) => { setAiChatRepositoryId(Number(event.target.value)); setAiChatMessages([]); setAiChatError(""); }} disabled={!repositories.length || aiChatSending} className="mt-1.5 min-h-10 w-full rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm text-[#e6edf3] outline-none focus:border-[#8957e5] disabled:opacity-50">
-                {repositories.map((repository) => <option key={repository.id} value={repository.id}>{repository.fullName}</option>)}
-              </select>
+              <div className="mx-auto mt-5 w-full max-w-3xl">
+                <label className="mb-2 block text-xs font-medium text-[#8b949e]">Select one of your repositories</label>
+                <div className="relative">
+                  <button type="button" aria-haspopup="listbox" aria-expanded={aiRepoPickerOpen} onClick={() => { setAiRepoPickerOpen((open) => !open); setAiRepoSearch(""); }} disabled={!aiChatRepositories.length || aiChatSending} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-[#30363d] bg-[#161b22] px-3.5 text-left text-sm text-[#e6edf3] shadow-sm transition hover:border-[#8957e5]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5] disabled:cursor-not-allowed disabled:opacity-50">
+                    <span className="flex min-w-0 items-center gap-2.5"><Github size={16} className="shrink-0 text-[#8b949e]"/><span className="truncate">{selectedAiRepository?.fullName || "No personal repositories found"}</span></span>
+                    <ChevronRight size={16} className={`shrink-0 text-[#8b949e] transition-transform ${aiRepoPickerOpen ? "rotate-90" : ""}`}/>
+                  </button>
+                  {aiRepoPickerOpen && <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-xl border border-[#30363d] bg-[#161b22] shadow-2xl">
+                    <div className="border-b border-[#30363d] p-2.5">
+                      <div className="flex items-center gap-2 rounded-md border border-[#30363d] bg-[#0d1117] px-3"><Search size={14} className="shrink-0 text-[#8b949e]"/><input autoFocus value={aiRepoSearch} onChange={(event) => setAiRepoSearch(event.target.value)} placeholder="Search your repositories…" className="h-9 min-w-0 flex-1 bg-transparent text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681]"/></div>
+                      <p className="mt-2 px-1 text-[11px] text-[#8b949e]">{matchingAiRepositories.length} of {aiChatRepositories.length} personal repositories</p>
+                    </div>
+                    <div role="listbox" aria-label="Your GitHub repositories" className="max-h-64 overflow-y-auto p-1.5">
+                      {matchingAiRepositories.length ? matchingAiRepositories.map((repository) => <button key={repository.id} type="button" role="option" aria-selected={selectedAiRepository?.id === repository.id} onClick={() => { setAiChatRepositoryId(repository.id); setAiChatMessages([]); setAiChatError(""); setAiRepoPickerOpen(false); setAiRepoSearch(""); }} className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm transition ${selectedAiRepository?.id === repository.id ? "bg-[#8957e5]/15 text-[#e6d5ff]" : "text-[#c9d1d9] hover:bg-[#21262d]"}`}>
+                        <span className="min-w-0"><span className="block truncate">{repository.name}</span><span className="mt-0.5 block truncate text-[11px] text-[#8b949e]">{repository.fullName}</span></span>
+                        {selectedAiRepository?.id === repository.id && <Check size={15} className="shrink-0 text-[#d2a8ff]"/>}
+                      </button>) : <p className="px-3 py-6 text-center text-xs text-[#8b949e]">No matching repositories. Try another search.</p>}
+                    </div>
+                  </div>}
+                </div>
+                <p className="mt-1.5 text-[11px] text-[#6e7681]">Only repositories owned by @{username || "your account"} are shown.</p>
+              </div>
             </div>
             <div className="mx-auto w-full max-w-5xl flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
-              {!repositories.length ? <div className="rounded-lg border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">Connect GitHub and import repositories to start a repository conversation.</div> : aiChatMessages.length === 0 ? <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4"><p className="text-sm font-semibold text-[#f0f6fc]">What would you like to know?</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">Ask about this repository&apos;s purpose, open issues, pull requests, workflow runs, README, risks or next steps.</p><div className="mt-3 flex flex-wrap gap-2">{["Summarize this repository","What needs attention?","Explain the recent workflow failures","What should I work on next?"].map((suggestion) => <button key={suggestion} onClick={() => setAiChatInput(suggestion)} className="rounded-full border border-[#30363d] px-3 py-1.5 text-left text-xs text-[#c9d1d9] hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10">{suggestion}</button>)}</div></div> : aiChatMessages.map((message,index) => <div key={index} className={message.role === "user" ? "ml-8 rounded-xl rounded-br-sm bg-[#1f3a5f] p-3 text-sm text-[#f0f6fc]" : "mr-3 rounded-xl rounded-bl-sm border border-[#30363d] bg-[#161b22] p-3"}>{message.role === "assistant" ? <MarkdownContent content={message.content}/> : <p className="whitespace-pre-wrap leading-6">{message.content}</p>}</div>)}
+              {!aiChatRepositories.length ? <div className="rounded-lg border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">No repositories owned by your GitHub account were found. Sync GitHub or check your repository access.</div> : aiChatMessages.length === 0 ? <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4"><p className="text-sm font-semibold text-[#f0f6fc]">What would you like to know?</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">Ask about this repository&apos;s purpose, open issues, pull requests, workflow runs, README, risks or next steps.</p><div className="mt-3 flex flex-wrap gap-2">{["Summarize this repository","What needs attention?","Explain the recent workflow failures","What should I work on next?"].map((suggestion) => <button key={suggestion} onClick={() => setAiChatInput(suggestion)} className="rounded-full border border-[#30363d] px-3 py-1.5 text-left text-xs text-[#c9d1d9] hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10">{suggestion}</button>)}</div></div> : aiChatMessages.map((message,index) => <div key={index} className={message.role === "user" ? "ml-8 rounded-xl rounded-br-sm bg-[#1f3a5f] p-3 text-sm text-[#f0f6fc]" : "mr-3 rounded-xl rounded-bl-sm border border-[#30363d] bg-[#161b22] p-3"}>{message.role === "assistant" ? <MarkdownContent content={message.content}/> : <p className="whitespace-pre-wrap leading-6">{message.content}</p>}</div>)}
               {aiChatSending && <div className="flex items-center gap-2 text-xs text-[#8b949e]"><LoaderCircle size={14} className="animate-spin"/> RepoPilot AI is thinking…</div>}
               {aiChatError && <div role="alert" className="rounded-md border border-[#da3633]/40 bg-[#da3633]/10 p-3 text-xs text-[#ff7b72]">{aiChatError}</div>}
             </div>
             <form onSubmit={(event) => { event.preventDefault(); void sendAiChatMessage(); }} className="border-t border-[#30363d] bg-[#0d1117] p-4"><div className="mx-auto w-full max-w-5xl">
               <div className="flex items-end gap-2 rounded-xl border border-[#30363d] bg-[#161b22] p-2 focus-within:border-[#8957e5]">
-                <textarea value={aiChatInput} onChange={(event) => setAiChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder="Ask anything about this repository…" rows={2} maxLength={4000} disabled={!repositories.length || aiChatSending} className="max-h-32 min-h-12 flex-1 resize-y bg-transparent px-2 py-1 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
+                <textarea value={aiChatInput} onChange={(event) => setAiChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder="Ask anything about this repository…" rows={2} maxLength={4000} disabled={!aiChatRepositories.length || aiChatSending} className="max-h-32 min-h-12 flex-1 resize-y bg-transparent px-2 py-1 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
                 <button type="submit" disabled={!aiChatInput.trim() || !repositories.length || aiChatSending} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#8957e5] text-white hover:bg-[#a371f7] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message"><Sparkles size={16}/></button>
               </div>
               <p className="mt-2 text-[10px] text-[#6e7681]">AI answers use GitHub metadata, recent activity and README. Verify important recommendations.</p>
