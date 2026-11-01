@@ -511,8 +511,22 @@ export default function RepoPilotDashboard() {
               <button type="button" onClick={() => navigateTo("Repositories")} className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#30363d] px-3 text-sm text-[#c9d1d9] hover:border-[#8b949e] hover:bg-[#161b22]">View all repositories</button>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-md border border-[#30363d] bg-[#161b22] p-3"><p className="text-sm font-medium">Needs attention</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">{attentionCount ? `${attentionCount} repository(ies) need a review.` : "No repositories are currently marked as needing attention."}</p><button type="button" onClick={() => navigateTo("Priorities")} className="mt-3 text-xs font-medium text-[#e3b341] hover:underline">Review priorities</button></div>
-              <div className="rounded-md border border-[#30363d] bg-[#161b22] p-3"><p className="text-sm font-medium">Work in progress</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">{inProgressCount ? `${inProgressCount} repository(ies) are in progress.` : "No repositories are currently marked in progress."}</p><button type="button" onClick={() => navigateTo("Work board")} className="mt-3 text-xs font-medium text-[#58a6ff] hover:underline">Open work board</button></div>
+              <button type="button" onClick={() => navigateTo("Priorities")} className="group relative overflow-hidden rounded-lg border border-[#d29922]/30 bg-gradient-to-br from-[#d29922]/10 via-[#161b22] to-[#161b22] p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-[#d29922]/70 hover:shadow-[0_8px_28px_rgba(210,153,34,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d29922]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d29922]/15 text-[#e3b341]"><ShieldAlert size={18}/></span><span className="text-sm font-semibold text-[#f0f6fc]">Needs attention</span></div>
+                  <span className="rounded-full border border-[#d29922]/30 bg-[#d29922]/10 px-2.5 py-1 text-xs font-semibold tabular-nums text-[#e3b341]">{attentionCount} {attentionCount === 1 ? "repository" : "repositories"}</span>
+                </div>
+                <p className="mt-3 text-sm leading-5 text-[#8b949e]">{attentionCount ? "Review projects that may be blocked or need your attention." : "Everything looks clear. No projects are flagged for review."}</p>
+                <div className="mt-4 flex items-center justify-between border-t border-[#d29922]/15 pt-3 text-xs font-semibold text-[#e3b341]"><span>{attentionCount ? "Review priorities" : "Open priorities"}</span><span className="transition-transform group-hover:translate-x-1">→</span></div>
+              </button>
+              <button type="button" onClick={() => navigateTo("Work board")} className="group relative overflow-hidden rounded-lg border border-[#1f6feb]/30 bg-gradient-to-br from-[#1f6feb]/10 via-[#161b22] to-[#161b22] p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-[#58a6ff]/70 hover:shadow-[0_8px_28px_rgba(31,111,235,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1f6feb]/15 text-[#79c0ff]"><GitBranch size={18}/></span><span className="text-sm font-semibold text-[#f0f6fc]">Work in progress</span></div>
+                  <span className="rounded-full border border-[#1f6feb]/30 bg-[#1f6feb]/10 px-2.5 py-1 text-xs font-semibold tabular-nums text-[#79c0ff]">{inProgressCount} {inProgressCount === 1 ? "repository" : "repositories"}</span>
+                </div>
+                <p className="mt-3 text-sm leading-5 text-[#8b949e]">{inProgressCount ? "Continue tracking the projects you are actively working on." : "No active projects yet. Choose a repository to get started."}</p>
+                <div className="mt-4 flex items-center justify-between border-t border-[#1f6feb]/15 pt-3 text-xs font-semibold text-[#79c0ff]"><span>Open work board</span><span className="transition-transform group-hover:translate-x-1">→</span></div>
+              </button>
             </div>
           </section>}
 
