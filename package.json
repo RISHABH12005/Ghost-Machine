@@ -29,5 +29,6 @@
   },
   "overrides": {
     "minimatch": "11.0.3"
-  }
+  },
+  "description": "AI-powered GitHub repository intelligence workspace."
 }
