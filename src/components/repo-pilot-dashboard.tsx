@@ -24,9 +24,7 @@ const STATUS_STYLES: Record<ProjectStatus, string> = {
   "On hold": "border-[#6e7681]/50 text-[#8b949e]",
 };
 const navItems = [
-  { label: "Overview", icon: LayoutDashboard },
-  { label: "Repositories", icon: FolderGit2 },
-  { label: "Work board", icon: ListTodo },
+  { label: "Dashboard", icon: LayoutDashboard },
   { label: "Priorities", icon: Zap },
 ];
 
@@ -137,7 +135,7 @@ export default function RepoPilotDashboard() {
   const [aiOrganization, setAiOrganization] = useState<AiOrganization | null>(null);
   const [organizing, setOrganizing] = useState(false);
   const [organizationError, setOrganizationError] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [contributionYear, setContributionYear] = useState(new Date().getFullYear());
   const [contributionCalendar, setContributionCalendar] = useState<{ totalContributions: number; weeks: Array<{ contributionDays: Array<{ date: string; contributionCount: number; contributionLevel: string }> }> } | null>(null);
@@ -146,7 +144,7 @@ export default function RepoPilotDashboard() {
 
   const navigateTo = (label: string) => {
     const routes: Record<string, string> = {
-      "Overview": "/dashboard",
+      "Dashboard": "/dashboard",
       "Repositories": "/repositories",
       "Work board": "/work-board",
       "Priorities": "/priorities",
@@ -162,10 +160,10 @@ export default function RepoPilotDashboard() {
       : pathname === "/work-board" ? "Work board"
       : pathname === "/priorities" ? "Priorities"
       : pathname === "/activity" ? "Activity history"
-      : pathname === "/settings" ? "Settings" : "Overview";
+      : pathname === "/settings" ? "Settings" : "Dashboard";
     setActiveNav(page);
     setFilter(page === "Work board" ? "In progress" : page === "Priorities" ? "Needs attention" : "All projects");
-    if (page === "Overview") setQuery("");
+    if (page === "Dashboard") setQuery("");
   }, [pathname]);
 
   const importRepositories = useCallback(async () => {
@@ -415,10 +413,8 @@ export default function RepoPilotDashboard() {
         <nav className="mt-2 space-y-1">
           {navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{(!sidebarCollapsed || mobileMenuOpen) && label}{label === "Priorities" && attentionCount > 0 && <span className={`rounded-full bg-[#d29922]/15 px-2 py-0.5 text-xs text-[#e3b341] ${sidebarCollapsed ? "lg:ml-0 ml-auto" : "ml-auto"}`}>{attentionCount}</span>}</button>)}
         </nav>
-        {(!sidebarCollapsed || mobileMenuOpen) && <div className="mt-6 px-2 text-xs font-semibold text-[#8b949e]">Personal</div>}
         <nav className="mt-2 space-y-1">
-          <button onClick={() => navigateTo("Activity history")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Activity history"><Activity size={16} className="text-[#8b949e]" />{(!sidebarCollapsed || mobileMenuOpen) && "Activity history"}</button>
-          <button onClick={() => navigateTo("Settings")} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#c9d1d9] hover:bg-[#161b22]" title="Settings"><Settings2 size={16} className="text-[#8b949e]" />{(!sidebarCollapsed || mobileMenuOpen) && "Settings"}</button>
+          <button onClick={() => navigateTo("Settings")} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === "Settings" ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`} title="Settings"><Settings2 size={16} className={activeNav === "Settings" ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{(!sidebarCollapsed || mobileMenuOpen) && "Settings"}</button>
         </nav>
       </aside>
 
@@ -434,7 +430,7 @@ export default function RepoPilotDashboard() {
 
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 border-b border-[#30363d] pb-5 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0"><div className="flex items-center gap-2 text-sm text-[#8b949e]"><Github size={16} /><span>Repositories</span><span>/</span><span className="text-[#e6edf3]">{username}</span></div><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">{activeNav === "Overview" ? "Dashboard" : activeNav === "Repositories" ? "Your repositories" : activeNav}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8b949e]">{activeNav === "Overview" ? "Review your repositories, assess project health, and decide what to work on next." : activeNav === "Repositories" ? "Browse, search, categorize, and update your GitHub repositories." : activeNav === "Work board" ? "Track projects currently in progress." : activeNav === "Priorities" ? "Focus on repositories that need attention first." : activeNav === "Activity history" ? "Review your recent workspace changes." : "Manage your GitHub account and workspace preferences."}</p></div>
+            <div className="min-w-0"><div className="flex items-center gap-2 text-sm text-[#8b949e]"><Github size={16} /><span>Repositories</span><span>/</span><span className="text-[#e6edf3]">{username}</span></div><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">{activeNav === "Dashboard" ? "Dashboard" : activeNav === "Repositories" ? "Your repositories" : activeNav}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8b949e]">{activeNav === "Overview" ? "Review your repositories, assess project health, and decide what to work on next." : activeNav === "Repositories" ? "Browse, search, categorize, and update your GitHub repositories." : activeNav === "Work board" ? "Track projects currently in progress." : activeNav === "Priorities" ? "Focus on repositories that need attention first." : activeNav === "Activity history" ? "Review your recent workspace changes." : "Manage your GitHub account and workspace preferences."}</p></div>
             <div className="flex items-center gap-2 text-sm text-[#8b949e]">{loading ? <><LoaderCircle size={15} className="animate-spin" /> Loading your GitHub repositories…</> : githubUser ? "Synced from your connected GitHub account" : "Sign in to load your repositories automatically"}</div>
           </div>
 
