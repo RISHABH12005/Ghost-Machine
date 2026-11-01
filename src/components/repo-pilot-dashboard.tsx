@@ -3,10 +3,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Activity, AlertCircle, ArrowLeft, Bell, BookOpen, Check, CheckCircle2, ChevronRight,
+  AlertCircle, ArrowLeft, BookOpen, Check, CheckCircle2, ChevronRight,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
-  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, RefreshCw,
-  Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X, Zap, PanelRightOpen, PanelRightClose,
+  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, RefreshCw,
+  Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
 
@@ -107,10 +107,6 @@ function StatusPill({ status }: { status: ProjectStatus }) {
   return <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLES[status]}`}><Icon size={12} />{status}</span>;
 }
 
-function Stat({ label, value, icon: Icon }: { label: string; value: number; icon: typeof FolderGit2 }) {
-  return <div className="flex items-center gap-2.5"><span className="text-[#8b949e]"><Icon size={15} /></span><span className="text-sm text-[#8b949e]">{label}</span><span className="text-sm font-semibold tabular-nums text-[#e6edf3]">{value}</span></div>;
-}
-
 export default function RepoPilotDashboard() {
   const pathname = usePathname();
   const router = useRouter();
@@ -147,10 +143,7 @@ export default function RepoPilotDashboard() {
   const [aiChatSending, setAiChatSending] = useState(false);
   const [aiChatError, setAiChatError] = useState("");
   const [aiUsage, setAiUsage] = useState({ total: 0, chats: 0, summaries: 0, organization: 0 });
-  const [contributionYear, setContributionYear] = useState(new Date().getFullYear());
-  const [contributionCalendar, setContributionCalendar] = useState<{ totalContributions: number; weeks: Array<{ contributionDays: Array<{ date: string; contributionCount: number; contributionLevel: string }> }> } | null>(null);
-  const [contributionLoading, setContributionLoading] = useState(false);
-  const [contributionError, setContributionError] = useState("");
+  const [contributionYear] = useState(new Date().getFullYear());
 
 
   useEffect(() => {
