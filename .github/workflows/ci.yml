@@ -20,6 +20,10 @@ jobs:
   validate:
     name: Type-check, lint, build, smoke test, and audit
     runs-on: ubuntu-latest
+    env:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: init.defaultBranch
+      GIT_CONFIG_VALUE_0: main
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
