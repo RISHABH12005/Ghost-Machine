@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity, AlertCircle, ArrowLeft, Bell, BookOpen, Check, CheckCircle2, ChevronRight,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
-  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu,
+  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, RefreshCw,
   Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X, Zap, PanelRightOpen, PanelRightClose,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
@@ -128,6 +128,7 @@ export default function RepoPilotDashboard() {
   const [assessments, setAssessments] = useState<Record<number, RepositoryAssessment>>({});
   const [assessingId, setAssessingId] = useState<number | null>(null);
   const [githubUser, setGithubUser] = useState<{ login: string; avatarUrl?: string | null } | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const [aiSummaries, setAiSummaries] = useState<Record<number, AiRepositorySummary>>({});
   const [summarizingId, setSummarizingId] = useState<number | null>(null);
   const [organizationMode, setOrganizationMode] = useState<"manual" | "ai">("manual");
@@ -218,6 +219,26 @@ export default function RepoPilotDashboard() {
     setFilter(page === "Work board" ? "In progress" : page === "Priorities" ? "Needs attention" : "All projects");
     if (page === "Dashboard") setQuery("");
   }, [pathname]);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) throw new Error("Could not sign out. Please try again.");
+      setGithubUser(null);
+      setRepositories([]);
+      setUsername("");
+      setAiChatMessages([]);
+      setAiChatRepositoryId(null);
+      router.replace("/");
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Sign out failed.");
+      setSigningOut(false);
+    }
+  };
 
   const importRepositories = useCallback(async () => {
     setLoading(true);
@@ -660,7 +681,13 @@ export default function RepoPilotDashboard() {
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1f6feb]/15 text-[#79c0ff]"><Github size={20}/></div>
                   <div className="min-w-0 flex-1"><h2 className="font-semibold text-[#f0f6fc]">GitHub connection</h2><p className="mt-1 text-sm text-[#8b949e]">Your repositories are read from your connected GitHub account.</p><p className="mt-3 text-sm text-[#c9d1d9]">{githubUser ? <><span className="text-[#3fb950]">●</span> Connected as <strong>@{githubUser.login}</strong></> : "Not connected"}</p>
-                    <a href={githubUser ? "https://github.com/" + githubUser.login : "/api/auth/github"} target={githubUser ? "_blank" : undefined} rel={githubUser ? "noreferrer" : undefined} className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#30363d] px-3 py-2 text-sm hover:border-[#58a6ff] hover:bg-[#161b22]">{githubUser ? "Open GitHub profile" : "Connect GitHub"} <ExternalLink size={13}/></a></div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {githubUser ? <>
+                        <button type="button" onClick={() => void importRepositories()} disabled={loading || signingOut} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#1f6feb]/60 bg-[#1f6feb]/10 px-3 py-2 text-sm font-medium text-[#79c0ff] transition hover:bg-[#1f6feb]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] disabled:cursor-wait disabled:opacity-50"><RefreshCw size={14} className={loading ? "animate-spin" : ""}/>{loading ? "Syncing GitHub…" : "Sync GitHub"}</button>
+                        <a href={"https://github.com/" + githubUser.login} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#30363d] px-3 py-2 text-sm text-[#c9d1d9] transition hover:border-[#58a6ff] hover:bg-[#161b22]">Open GitHub profile <ExternalLink size={13}/></a>
+                        <button type="button" onClick={() => void handleSignOut()} disabled={signingOut || loading} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#da3633]/60 px-3 py-2 text-sm font-medium text-[#ff7b72] transition hover:bg-[#da3633]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff7b72] disabled:cursor-wait disabled:opacity-50"><LogOut size={14}/>{signingOut ? "Signing out…" : "Sign out"}</button>
+                      </> : <a href="/api/auth/github" className="inline-flex items-center gap-2 rounded-md border border-[#30363d] px-3 py-2 text-sm hover:border-[#58a6ff] hover:bg-[#161b22]">Connect GitHub <ExternalLink size={13}/></a>}
+                    </div></div>
                 </div>
               </div>
               <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
