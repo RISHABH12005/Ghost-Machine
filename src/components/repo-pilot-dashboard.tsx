@@ -451,43 +451,6 @@ export default function RepoPilotDashboard() {
             <span className="ml-auto hidden text-xs text-[#8b949e] lg:inline">{lastSynced ? `Last synced at ${lastSynced}` : "Waiting for import"}</span>
           </section>}
 
-          {isOverviewPage && githubUser && <section className="mt-5 rounded-lg border border-[#30363d] bg-[#0d1117] p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><h2 className="text-base font-semibold">GitHub contributions</h2><p className="mt-1 text-sm text-[#8b949e]">{contributionLoading ? "Loading contribution history…" : contributionCalendar ? `${contributionCalendar.totalContributions.toLocaleString()} contributions in ${contributionYear}` : `Contribution history for ${contributionYear}`}</p></div>
-              <label className="flex items-center gap-2 text-sm text-[#8b949e]">Year
-                <select value={contributionYear} onChange={(event) => setContributionYear(Number(event.target.value))} className="min-h-9 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm text-[#e6edf3] outline-none focus:border-[#2f81f7]">
-                  {Array.from({ length: Math.min(5, new Date().getFullYear() - 2022) }, (_, index) => new Date().getFullYear() - index).map((year) => <option key={year} value={year}>{year}</option>)}
-                </select>
-              </label>
-            </div>
-            {contributionError ? <p role="alert" className="mt-4 rounded-md border border-[#da3633]/40 bg-[#da3633]/10 p-3 text-sm text-[#ff7b72]">{contributionError}</p> : contributionCalendar ? <div className="mt-4 overflow-x-auto pb-2">
-              <div className="min-w-[720px]">
-                <div className="mb-2 grid w-max gap-[3px] text-[11px] text-[#8b949e]" style={{ gridTemplateColumns: `repeat(${contributionCalendar.weeks.length}, minmax(0, 1fr))` }}>
-                  {contributionCalendar.weeks.map((week, index) => {
-                    const firstDay = week.contributionDays[0];
-                    const previous = index > 0 ? contributionCalendar.weeks[index - 1].contributionDays[0] : null;
-                    const showMonth = firstDay && (!previous || new Date(firstDay.date).getUTCMonth() !== new Date(previous.date).getUTCMonth());
-                    return <span key={index} className="whitespace-nowrap">{showMonth ? new Date(firstDay.date).toLocaleDateString("en", { month: "short", timeZone: "UTC" }) : ""}</span>;
-                  })}
-                </div>
-                <div className="grid w-max gap-[3px]" style={{ gridTemplateColumns: `repeat(${contributionCalendar.weeks.length}, minmax(0, 1fr))`, gridTemplateRows: "repeat(7, 12px)", gridAutoFlow: "column" }}>
-                  {contributionCalendar.weeks.flatMap((week, weekIndex) => week.contributionDays.map((day) => {
-                    const colors: Record<string, string> = {
-                      NONE: "bg-[#161b22] border-[#30363d]",
-                      FIRST_QUARTILE: "bg-[#0e4429] border-[#0e4429]",
-                      SECOND_QUARTILE: "bg-[#006d32] border-[#006d32]",
-                      THIRD_QUARTILE: "bg-[#26a641] border-[#26a641]",
-                      FOURTH_QUARTILE: "bg-[#39d353] border-[#39d353]",
-                    };
-                    const dateLabel = new Date(`${day.date}T00:00:00Z`).toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
-                    return <span key={day.date} title={`${day.contributionCount} contribution${day.contributionCount === 1 ? "" : "s"} on ${dateLabel}`} aria-label={`${day.contributionCount} contributions on ${dateLabel}`} className={`h-3 min-w-0 rounded-[2px] border transition-transform hover:scale-125 hover:ring-1 hover:ring-white/70 ${colors[day.contributionLevel] || colors.NONE}`} style={{ gridColumn: weekIndex + 1, gridRow: new Date(`${day.date}T00:00:00Z`).getUTCDay() + 1 }} />
-                  }))}
-                </div>
-                <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-[#8b949e]"><span>Less</span><span className="h-3 w-3 rounded-[2px] bg-[#161b22] border border-[#30363d]" /><span className="h-3 w-3 rounded-[2px] bg-[#0e4429]" /><span className="h-3 w-3 rounded-[2px] bg-[#006d32]" /><span className="h-3 w-3 rounded-[2px] bg-[#26a641]" /><span className="h-3 w-3 rounded-[2px] bg-[#39d353]" /><span>More</span></div>
-              </div>
-            </div> : <p className="mt-4 text-sm text-[#8b949e]">{contributionLoading ? "Fetching your real GitHub contribution data…" : "Contribution history will appear here."}</p>}
-          </section>}
-
           {isOverviewPage && <section className="mt-5 rounded-lg border border-[#30363d] bg-[#0d1117] p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div><h2 className="text-lg font-semibold">Your repositories</h2><p className="mt-1 text-sm text-[#8b949e]">Review repository health, update project status, and see what needs your attention.</p></div>
