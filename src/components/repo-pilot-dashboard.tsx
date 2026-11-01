@@ -144,10 +144,56 @@ export default function RepoPilotDashboard() {
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatSending, setAiChatSending] = useState(false);
   const [aiChatError, setAiChatError] = useState("");
+  const [aiUsage, setAiUsage] = useState({ total: 0, chats: 0, summaries: 0, organization: 0 });
   const [contributionYear, setContributionYear] = useState(new Date().getFullYear());
   const [contributionCalendar, setContributionCalendar] = useState<{ totalContributions: number; weeks: Array<{ contributionDays: Array<{ date: string; contributionCount: number; contributionLevel: string }> }> } | null>(null);
   const [contributionLoading, setContributionLoading] = useState(false);
   const [contributionError, setContributionError] = useState("");
+
+
+  useEffect(() => {
+    if (!username) return;
+    try {
+      const saved = localStorage.getItem(`repopilot-ai-usage:${username.toLowerCase()}`);
+      if (!saved) { setAiUsage({ total: 0, chats: 0, summaries: 0, organization: 0 }); return; }
+      const parsed = JSON.parse(saved) as Partial<typeof aiUsage>;
+      setAiUsage({
+        total: Number(parsed.total) || 0,
+        chats: Number(parsed.chats) || 0,
+        summaries: Number(parsed.summaries) || 0,
+        organization: Number(parsed.organization) || 0,
+      });
+    } catch { setAiUsage({ total: 0, chats: 0, summaries: 0, organization: 0 }); }
+  }, [username]);
+
+  const recordAiUsage = (kind: "chats" | "summaries" | "organization") => {
+    setAiUsage((current) => {
+      const next = { ...current, total: current.total + 1, [kind]: current[kind] + 1 };
+      try { localStorage.setItem(`repopilot-ai-usage:${username.toLowerCase()}`, JSON.stringify(next)); } catch { /* Keep the in-memory count. */ }
+      return next;
+    });
+  };
+
+  const clearAllWorkspaceData = () => {
+    const confirmed = window.confirm("Clear all RepoPilot workspace data saved in this browser? This resets saved project statuses, AI suggestions, AI usage counts, and local activity. It does not delete GitHub repositories or disconnect your GitHub account.");
+    if (!confirmed) return;
+    try {
+      Object.keys(localStorage).filter((key) => key.startsWith("repopilot-")).forEach((key) => localStorage.removeItem(key));
+    } catch { /* Continue with in-memory reset if browser storage is unavailable. */ }
+    setRepositories((items) => items.map((item) => ({ ...item, status: item.archived ? "On hold" : "Not assessed" })));
+    setAiOrganization(null);
+    setOrganizationMode("manual");
+    setAiSummaries({});
+    setAssessments({});
+    setAiChatMessages([]);
+    setAiChatInput("");
+    setAiChatError("");
+    setAiUsage({ total: 0, chats: 0, summaries: 0, organization: 0 });
+    setActivity([]);
+    setOrganizationError("");
+    setQuery("");
+    setFilter("All projects");
+  };
 
   const navigateTo = (label: string) => {
     const routes: Record<string, string> = {
@@ -258,6 +304,7 @@ export default function RepoPilotDashboard() {
       const result = await response.json() as AiOrganization & { error?: string };
       if (!response.ok) throw new Error(result.error || "AI organization failed.");
       setAiOrganization(result);
+      recordAiUsage("organization");
       setOrganizationMode("ai");
       try { localStorage.setItem(`repopilot-ai-organization:${username.toLowerCase()}`, JSON.stringify(result)); } catch { /* AI suggestions remain available for this session. */ }
     } catch (cause) {
@@ -295,6 +342,7 @@ export default function RepoPilotDashboard() {
       const result = await response.json() as AiRepositorySummary;
       if (!response.ok) throw new Error(result.error || "AI summary failed.");
       setAiSummaries((items) => ({ ...items, [repository.id]: result }));
+      recordAiUsage("summaries");
     } catch (error) {
       setAiSummaries((items) => ({ ...items, [repository.id]: { summary: "", model: "", generatedAt: new Date().toISOString(), source: "", error: error instanceof Error ? error.message : "AI summary failed." } }));
     } finally { setSummarizingId(null); }
@@ -319,6 +367,7 @@ export default function RepoPilotDashboard() {
       const result = await response.json() as { reply?: string; model?: string; error?: string };
       if (!response.ok) throw new Error(result.error || "AI Talk could not respond.");
       setAiChatMessages((items) => [...items, { role: "assistant", content: result.reply || "I couldn't generate a reply." }]);
+      recordAiUsage("chats");
     } catch (cause) {
       setAiChatError(cause instanceof Error ? cause.message : "AI Talk failed. Please try again.");
     } finally {
