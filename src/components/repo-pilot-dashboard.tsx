@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2, ChevronRight,
+  Activity, AlertCircle, ArrowLeft, Bell, BookOpen, Check, CheckCircle2, ChevronRight,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu,
   Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X, Zap, PanelRightOpen, PanelRightClose,
@@ -212,7 +212,8 @@ export default function RepoPilotDashboard() {
       : pathname === "/work-board" ? "Work board"
       : pathname === "/priorities" ? "Priorities"
       : pathname === "/activity" ? "Activity history"
-      : pathname === "/settings" ? "Settings" : "Dashboard";
+      : pathname === "/settings" ? "Settings"
+      : pathname === "/ai-talk" ? "AI Talk" : "Dashboard";
     setActiveNav(page);
     setFilter(page === "Work board" ? "In progress" : page === "Priorities" ? "Needs attention" : "All projects");
     if (page === "Dashboard") setQuery("");
@@ -492,7 +493,7 @@ export default function RepoPilotDashboard() {
           {navItems.map(({ label, icon: Icon }) => <button key={label} type="button" onClick={() => navigateTo(label)} title={sidebarCollapsed && !mobileMenuOpen ? label : undefined} aria-label={label} className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 py-2 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"} ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={`shrink-0 ${activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"}`} />{(!sidebarCollapsed || mobileMenuOpen) && <span className="min-w-0 truncate">{label}</span>}</button>) }
         </nav>
         <nav className="mt-2 space-y-1">
-          <button type="button" onClick={() => { setAiSidebarOpen(true); setMobileMenuOpen(false); }} title="AI Talk" aria-label="AI Talk" className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 border-l-transparent py-2 text-sm text-[#c9d1d9] transition-colors hover:bg-[#161b22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"}`}><Sparkles size={16} className="shrink-0 text-[#d2a8ff]" />{(!sidebarCollapsed || mobileMenuOpen) && <span className="truncate">AI Talk</span>}</button>
+          <button type="button" onClick={() => { setMobileMenuOpen(false); router.push("/ai-talk"); }} title="AI Talk" aria-label="AI Talk" className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"} ${pathname === "/ai-talk" ? "border-l-[#8957e5] bg-[#211638] font-semibold text-[#e6d5ff]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Sparkles size={16} className="shrink-0 text-[#d2a8ff]" />{(!sidebarCollapsed || mobileMenuOpen) && <span className="truncate">AI Talk</span>}</button>
           <button type="button" onClick={() => navigateTo("Settings")} title="Settings" aria-label="Settings" className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"} ${activeNav === "Settings" ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Settings2 size={16} className={`shrink-0 ${activeNav === "Settings" ? "text-[#f0f6fc]" : "text-[#8b949e]"}`} />{(!sidebarCollapsed || mobileMenuOpen) && <span className="truncate">Settings</span>}</button>
         </nav>
         <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeSidebar(event); }} onPointerMove={resizeSidebar} className="absolute right-[-4px] top-0 z-50 hidden h-full w-2 cursor-col-resize touch-none bg-transparent hover:bg-[#58a6ff]/40 lg:block" />
@@ -504,32 +505,32 @@ export default function RepoPilotDashboard() {
       </aside>
 
       <main style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties} className="min-h-screen pl-0 transition-[padding] duration-200 lg:pl-[var(--sidebar-width)]">
-        {aiSidebarOpen && <>
-          <button aria-label="Close AI Talk" onClick={toggleAiSidebar} className="fixed inset-0 z-30 bg-black/40" />
-          <aside style={{ width: aiChatWidth, maxWidth: "100vw" }} className="fixed inset-y-0 right-0 z-50 flex max-w-full flex-col border-l border-[#30363d] bg-[#0d1117] shadow-2xl">
-            <div role="separator" aria-orientation="vertical" aria-label="Resize AI chat" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeAiChat(event); }} onPointerMove={resizeAiChat} className="absolute left-[-4px] top-0 z-50 hidden h-full w-2 cursor-col-resize touch-none bg-transparent hover:bg-[#8957e5]/50 sm:block" />
+        {(aiSidebarOpen || pathname === "/ai-talk") && <>
+          {pathname !== "/ai-talk" && <button aria-label="Close AI Talk" onClick={toggleAiSidebar} className="fixed inset-0 z-30 bg-black/40" />}
+          <aside style={{ width: pathname === "/ai-talk" ? "100vw" : aiChatWidth, maxWidth: "100vw" }} className={`fixed z-50 flex max-w-full flex-col bg-[#0d1117] ${pathname === "/ai-talk" ? "inset-0" : "inset-y-0 right-0 border-l border-[#30363d] shadow-2xl"}`}>
+            {pathname !== "/ai-talk" && <div role="separator" aria-orientation="vertical" aria-label="Resize AI chat" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeAiChat(event); }} onPointerMove={resizeAiChat} className="absolute left-[-4px] top-0 z-50 hidden h-full w-2 cursor-col-resize touch-none bg-transparent hover:bg-[#8957e5]/50 sm:block" />}
             <div className="border-b border-[#30363d] p-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-3">
                 <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#8957e5]/40 bg-[#8957e5]/10 text-[#d2a8ff]"><Sparkles size={18}/></span><div><h2 className="text-base font-semibold text-[#f0f6fc]">AI Talk</h2><p className="text-xs text-[#8b949e]">Ask questions about a GitHub repository</p></div></div>
-                <button onClick={toggleAiSidebar} aria-label="Close AI Talk" className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d]"><X size={17}/></button>
+                <button onClick={() => pathname === "/ai-talk" ? router.push("/dashboard") : toggleAiSidebar()} aria-label={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} title={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} className="inline-flex items-center gap-2 rounded-md border border-[#30363d] px-3 py-2 text-sm text-[#c9d1d9] hover:bg-[#21262d]">{pathname === "/ai-talk" ? <><ArrowLeft size={16}/>Back to dashboard</> : <X size={17}/>}</button>
               </div>
               <label className="mt-4 block text-xs font-medium text-[#8b949e]">Selected repository</label>
               <select value={aiChatRepositoryId ?? repositories[0]?.id ?? ""} onChange={(event) => { setAiChatRepositoryId(Number(event.target.value)); setAiChatMessages([]); setAiChatError(""); }} disabled={!repositories.length || aiChatSending} className="mt-1.5 min-h-10 w-full rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm text-[#e6edf3] outline-none focus:border-[#8957e5] disabled:opacity-50">
                 {repositories.map((repository) => <option key={repository.id} value={repository.id}>{repository.fullName}</option>)}
               </select>
             </div>
-            <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            <div className="mx-auto w-full max-w-5xl flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
               {!repositories.length ? <div className="rounded-lg border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">Connect GitHub and import repositories to start a repository conversation.</div> : aiChatMessages.length === 0 ? <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4"><p className="text-sm font-semibold text-[#f0f6fc]">What would you like to know?</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">Ask about this repository&apos;s purpose, open issues, pull requests, workflow runs, README, risks or next steps.</p><div className="mt-3 flex flex-wrap gap-2">{["Summarize this repository","What needs attention?","Explain the recent workflow failures","What should I work on next?"].map((suggestion) => <button key={suggestion} onClick={() => setAiChatInput(suggestion)} className="rounded-full border border-[#30363d] px-3 py-1.5 text-left text-xs text-[#c9d1d9] hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10">{suggestion}</button>)}</div></div> : aiChatMessages.map((message,index) => <div key={index} className={message.role === "user" ? "ml-8 rounded-xl rounded-br-sm bg-[#1f3a5f] p-3 text-sm text-[#f0f6fc]" : "mr-3 rounded-xl rounded-bl-sm border border-[#30363d] bg-[#161b22] p-3"}>{message.role === "assistant" ? <MarkdownContent content={message.content}/> : <p className="whitespace-pre-wrap leading-6">{message.content}</p>}</div>)}
               {aiChatSending && <div className="flex items-center gap-2 text-xs text-[#8b949e]"><LoaderCircle size={14} className="animate-spin"/> RepoPilot AI is thinking…</div>}
               {aiChatError && <div role="alert" className="rounded-md border border-[#da3633]/40 bg-[#da3633]/10 p-3 text-xs text-[#ff7b72]">{aiChatError}</div>}
             </div>
-            <form onSubmit={(event) => { event.preventDefault(); void sendAiChatMessage(); }} className="border-t border-[#30363d] bg-[#0d1117] p-4">
+            <form onSubmit={(event) => { event.preventDefault(); void sendAiChatMessage(); }} className="border-t border-[#30363d] bg-[#0d1117] p-4"><div className="mx-auto w-full max-w-5xl">
               <div className="flex items-end gap-2 rounded-xl border border-[#30363d] bg-[#161b22] p-2 focus-within:border-[#8957e5]">
                 <textarea value={aiChatInput} onChange={(event) => setAiChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder="Ask anything about this repository…" rows={2} maxLength={4000} disabled={!repositories.length || aiChatSending} className="max-h-32 min-h-12 flex-1 resize-y bg-transparent px-2 py-1 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
                 <button type="submit" disabled={!aiChatInput.trim() || !repositories.length || aiChatSending} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#8957e5] text-white hover:bg-[#a371f7] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message"><Sparkles size={16}/></button>
               </div>
               <p className="mt-2 text-[10px] text-[#6e7681]">AI answers use GitHub metadata, recent activity and README. Verify important recommendations.</p>
-            </form>
+            </div></form>
           </aside>
         </>}
         {activePanel && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="panel-title" className="w-full max-w-lg rounded-xl border border-[#30363d] bg-[#0d1117] p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-[#8b949e]">REPOPILOT WORKSPACE</p><h2 id="panel-title" className="mt-2 text-xl font-semibold">{activePanel === "help" ? "How to use RepoPilot" : activePanel === "notifications" ? "Notifications" : activePanel === "activity" ? "Activity history" : "Settings"}</h2></div><button onClick={() => setActivePanel(null)} aria-label="Close dialog" className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d]"><X size={17} /></button></div>
