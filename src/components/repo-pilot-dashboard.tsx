@@ -137,6 +137,11 @@ export default function RepoPilotDashboard() {
   const [organizationError, setOrganizationError] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
+  const [aiChatRepositoryId, setAiChatRepositoryId] = useState<number | null>(null);
+  const [aiChatMessages, setAiChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [aiChatInput, setAiChatInput] = useState("");
+  const [aiChatSending, setAiChatSending] = useState(false);
+  const [aiChatError, setAiChatError] = useState("");
   const [contributionYear, setContributionYear] = useState(new Date().getFullYear());
   const [contributionCalendar, setContributionCalendar] = useState<{ totalContributions: number; weeks: Array<{ contributionDays: Array<{ date: string; contributionCount: number; contributionLevel: string }> }> } | null>(null);
   const [contributionLoading, setContributionLoading] = useState(false);
@@ -293,6 +298,32 @@ export default function RepoPilotDashboard() {
     } finally { setSummarizingId(null); }
   };
 
+  const sendAiChatMessage = async () => {
+    const message = aiChatInput.trim();
+    const selectedRepository = repositories.find((item) => item.id === aiChatRepositoryId) || repositories[0];
+    if (!message || !selectedRepository || aiChatSending) return;
+    const nextMessages = [...aiChatMessages, { role: "user" as const, content: message }];
+    setAiChatMessages(nextMessages);
+    setAiChatInput("");
+    setAiChatError("");
+    setAiChatSending(true);
+    const [owner, repoName] = selectedRepository.fullName.split("/");
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner, repo: repoName, messages: nextMessages }),
+      });
+      const result = await response.json() as { reply?: string; model?: string; error?: string };
+      if (!response.ok) throw new Error(result.error || "AI Talk could not respond.");
+      setAiChatMessages((items) => [...items, { role: "assistant", content: result.reply || "I couldn't generate a reply." }]);
+    } catch (cause) {
+      setAiChatError(cause instanceof Error ? cause.message : "AI Talk failed. Please try again.");
+    } finally {
+      setAiChatSending(false);
+    }
+  };
+
   const assessRepository = async (repository: Repository) => {
     const [owner, name] = repository.fullName.split("/");
     if (!owner || !name) return;
@@ -413,11 +444,33 @@ export default function RepoPilotDashboard() {
       </aside>
 
       <main className={`min-h-screen transition-all ${sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[260px]"}`}>
-        {aiSidebarOpen && <><button aria-label="Close AI suggestions" onClick={toggleAiSidebar} className="fixed inset-0 z-30 bg-black/40 lg:bg-transparent" /><aside className="fixed inset-y-0 right-0 z-50 w-full max-w-[390px] overflow-y-auto border-l border-[#30363d] bg-[#0d1117] p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#d2a8ff]">RepoPilot AI</p><h2 className="mt-1 text-lg font-semibold">Project suggestions</h2><p className="mt-1 text-xs leading-5 text-[#8b949e]">Prioritized recommendations based on GitHub repository metadata.</p></div><button onClick={toggleAiSidebar} aria-label="Hide AI suggestions" className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d]"><X size={16}/></button></div>
-          {aiOrganization ? <><div className="mt-4 flex items-center justify-between rounded-md border border-[#30363d] bg-[#161b22] p-3"><div><p className="text-xs text-[#8b949e]">Last organized</p><p className="mt-1 text-sm">{relativeDate(aiOrganization.generatedAt)}</p></div><button onClick={() => void organizeAllRepositories()} disabled={organizing} className="rounded-md border border-[#8957e5]/60 px-2.5 py-1.5 text-xs text-[#d2a8ff] disabled:opacity-50">{organizing ? "Updating…" : "Refresh"}</button></div><div className="mt-4 space-y-2">{[...aiOrganization.projects].sort((a,b)=>a.priority-b.priority).map((suggestion) => { const repo = repositories.find((item) => item.id === suggestion.id); if (!repo) return null; return <article key={suggestion.id} className="rounded-md border border-[#30363d] p-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><a href={repo.url} target="_blank" rel="noreferrer" className="break-all text-sm font-medium text-[#58a6ff] hover:underline">{repo.name}</a><p className="mt-1 text-xs leading-5 text-[#8b949e]">{suggestion.reason}</p></div><span className="shrink-0 rounded-full border border-[#8957e5]/50 px-2 py-0.5 text-[10px] text-[#d2a8ff]">P{suggestion.priority}</span></div><div className="mt-2 flex items-center justify-between gap-2"><StatusPill status={suggestion.status}/><button onClick={() => updateStatus(repo.id,suggestion.status)} className="text-xs text-[#3fb950] hover:underline">Apply</button></div></article>; })}</div><button onClick={applyAllAiSuggestions} className="mt-4 w-full rounded-md bg-[#238636] px-3 py-2 text-sm font-medium text-white hover:bg-[#2ea043]">Apply all suggestions</button></> : <div className="mt-5 rounded-md border border-dashed border-[#30363d] p-5"><Sparkles size={20} className="text-[#d2a8ff]"/><p className="mt-3 text-sm font-medium">No AI suggestions yet</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">Run AI organization once. Your suggestions will be saved automatically and available here next time.</p><button onClick={() => void organizeAllRepositories()} disabled={organizing || !repositories.length} className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#8957e5]/60 bg-[#8957e5]/10 px-3 py-2 text-xs text-[#d2a8ff] disabled:opacity-50">{organizing ? <LoaderCircle size={13} className="animate-spin"/> : <Sparkles size={13}/>} {organizing ? "Analyzing repositories…" : "Generate suggestions"}</button>{organizationError && <p className="mt-3 text-xs text-[#ff7b72]">{organizationError}</p>}</div>}
-          <p className="mt-5 text-[11px] leading-5 text-[#6e7681]">AI recommendations use repository metadata. They do not inspect source code or change manual statuses unless you apply them.</p>
-        </aside></>}
-
+        {aiSidebarOpen && <>
+          <button aria-label="Close AI Talk" onClick={toggleAiSidebar} className="fixed inset-0 z-30 bg-black/40" />
+          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[460px] flex-col border-l border-[#30363d] bg-[#0d1117] shadow-2xl">
+            <div className="border-b border-[#30363d] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#8957e5]/40 bg-[#8957e5]/10 text-[#d2a8ff]"><Sparkles size={18}/></span><div><h2 className="text-base font-semibold text-[#f0f6fc]">AI Talk</h2><p className="text-xs text-[#8b949e]">Ask questions about a GitHub repository</p></div></div>
+                <button onClick={toggleAiSidebar} aria-label="Close AI Talk" className="rounded-md p-2 text-[#8b949e] hover:bg-[#21262d]"><X size={17}/></button>
+              </div>
+              <label className="mt-4 block text-xs font-medium text-[#8b949e]">Selected repository</label>
+              <select value={aiChatRepositoryId ?? repositories[0]?.id ?? ""} onChange={(event) => { setAiChatRepositoryId(Number(event.target.value)); setAiChatMessages([]); setAiChatError(""); }} disabled={!repositories.length || aiChatSending} className="mt-1.5 min-h-10 w-full rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm text-[#e6edf3] outline-none focus:border-[#8957e5] disabled:opacity-50">
+                {repositories.map((repository) => <option key={repository.id} value={repository.id}>{repository.fullName}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 space-y-4 overflow-y-auto p-4">
+              {!repositories.length ? <div className="rounded-lg border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">Connect GitHub and import repositories to start a repository conversation.</div> : aiChatMessages.length === 0 ? <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4"><p className="text-sm font-semibold text-[#f0f6fc]">What would you like to know?</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">Ask about this repository's purpose, open issues, pull requests, workflow runs, README, risks or next steps.</p><div className="mt-3 flex flex-wrap gap-2">{["Summarize this repository","What needs attention?","Explain the recent workflow failures","What should I work on next?"].map((suggestion) => <button key={suggestion} onClick={() => setAiChatInput(suggestion)} className="rounded-full border border-[#30363d] px-3 py-1.5 text-left text-xs text-[#c9d1d9] hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10">{suggestion}</button>)}</div></div> : aiChatMessages.map((message,index) => <div key={index} className={message.role === "user" ? "ml-8 rounded-xl rounded-br-sm bg-[#1f3a5f] p-3 text-sm text-[#f0f6fc]" : "mr-3 rounded-xl rounded-bl-sm border border-[#30363d] bg-[#161b22] p-3"}>{message.role === "assistant" ? <MarkdownContent content={message.content}/> : <p className="whitespace-pre-wrap leading-6">{message.content}</p>}</div>)}
+              {aiChatSending && <div className="flex items-center gap-2 text-xs text-[#8b949e]"><LoaderCircle size={14} className="animate-spin"/> RepoPilot AI is thinking…</div>}
+              {aiChatError && <div role="alert" className="rounded-md border border-[#da3633]/40 bg-[#da3633]/10 p-3 text-xs text-[#ff7b72]">{aiChatError}</div>}
+            </div>
+            <form onSubmit={(event) => { event.preventDefault(); void sendAiChatMessage(); }} className="border-t border-[#30363d] bg-[#0d1117] p-4">
+              <div className="flex items-end gap-2 rounded-xl border border-[#30363d] bg-[#161b22] p-2 focus-within:border-[#8957e5]">
+                <textarea value={aiChatInput} onChange={(event) => setAiChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder="Ask anything about this repository…" rows={2} maxLength={4000} disabled={!repositories.length || aiChatSending} className="max-h-32 min-h-12 flex-1 resize-y bg-transparent px-2 py-1 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
+                <button type="submit" disabled={!aiChatInput.trim() || !repositories.length || aiChatSending} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#8957e5] text-white hover:bg-[#a371f7] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message"><Sparkles size={16}/></button>
+              </div>
+              <p className="mt-2 text-[10px] text-[#6e7681]">AI answers use GitHub metadata, recent activity and README. Verify important recommendations.</p>
+            </form>
+          </aside>
+        </>}
         {activePanel && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="panel-title" className="w-full max-w-lg rounded-xl border border-[#30363d] bg-[#0d1117] p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-[#8b949e]">REPOPILOT WORKSPACE</p><h2 id="panel-title" className="mt-2 text-xl font-semibold">{activePanel === "help" ? "How to use RepoPilot" : activePanel === "notifications" ? "Notifications" : activePanel === "activity" ? "Activity history" : "Settings"}</h2></div><button onClick={() => setActivePanel(null)} aria-label="Close dialog" className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d]"><X size={17} /></button></div>
           {activePanel === "help" ? <div className="mt-5 space-y-3 text-sm leading-6 text-[#c9d1d9]"><p><strong>Import repositories:</strong> sign in with GitHub; your repositories load automatically.</p><p><strong>Search and filter:</strong> search by repository name, description, language, branch, or topic.</p><p><strong>Track progress:</strong> change a repository status. It is saved in this browser for that username.</p><p><strong>AI summaries:</strong> use the AI summary action on a repository to request an Ollama Cloud analysis. It uses repository metadata, issues, pull requests, and recent workflow runs—not source code.</p></div> : activePanel === "notifications" ? <div className="mt-5"><p className="text-sm text-[#8b949e]">{attentionCount ? `${attentionCount} project(s) marked for attention.` : "You have no projects marked as needing attention."}</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{repositories.filter((repo) => repo.status === "Needs attention").map((repo) => <a key={repo.id} href={repo.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border border-[#30363d] p-3 text-sm hover:bg-[#161b22]">{repo.name}<ExternalLink size={14} /></a>)}</div><button onClick={() => { setActivePanel(null); navigateTo("Priorities"); }} className="mt-4 rounded-md bg-[#238636] px-3 py-2 text-sm font-medium text-white hover:bg-[#2ea043]">View priorities</button></div> : activePanel === "activity" ? <div className="mt-5">{activity.length ? <ol className="max-h-80 space-y-3 overflow-y-auto">{activity.map((item) => <li key={item.id} className="border-l border-[#30363d] pl-3"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="rounded-md border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">No status changes in this session yet.</p>}</div> : <div className="mt-5 space-y-4"><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Connected GitHub account</p><p className="mt-1 text-xs text-[#8b949e]">{githubUser ? `Signed in as @${githubUser.login}. Repositories load automatically from this account.` : "Not connected. Sign in with GitHub to load your repositories automatically."}</p></div><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Reset saved statuses</p><p className="mt-1 text-xs text-[#8b949e]">Remove saved status preferences for @{username}.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Not assessed" }))); setActivity((items) => [{ id: `reset-${Date.now()}`, message: `Reset saved statuses for @${username}`, time: new Date().toLocaleString() }, ...items].slice(0, 50)); setActivePanel(null); }} className="mt-3 rounded-md border border-[#da3633]/60 px-3 py-1.5 text-xs text-[#ff7b72] hover:bg-[#da3633]/10">Reset statuses</button></div></div>}
           <div className="mt-6 flex justify-end border-t border-[#30363d] pt-4"><button onClick={() => setActivePanel(null)} className="rounded-md border border-[#30363d] px-3 py-1.5 text-sm hover:bg-[#21262d]">Close</button></div></section></div>}
