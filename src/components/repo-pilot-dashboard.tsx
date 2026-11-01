@@ -136,6 +136,8 @@ export default function RepoPilotDashboard() {
   const [organizing, setOrganizing] = useState(false);
   const [organizationError, setOrganizationError] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(76);
+  const [aiChatWidth, setAiChatWidth] = useState(460);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [aiChatRepositoryId, setAiChatRepositoryId] = useState<number | null>(null);
   const [aiChatMessages, setAiChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
@@ -378,14 +380,15 @@ export default function RepoPilotDashboard() {
     return () => window.clearInterval(interval);
   }, [githubUser, importRepositories]);
 
-  const toggleSidebar = () => {
-    if (window.matchMedia("(min-width: 1024px)").matches) {
-      setSidebarCollapsed((current) => {
-        const next = !current;
-        try { localStorage.setItem(`repopilot-sidebar-collapsed:${username.toLowerCase()}`, String(next)); } catch {}
-        return next;
-      });
-    } else setMobileMenuOpen((current) => !current);
+  const resizeSidebar = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.buttons !== 1) return;
+    const width = Math.max(68, Math.min(360, event.clientX));
+    setSidebarWidth(width);
+    setSidebarCollapsed(width < 150);
+  };
+  const resizeAiChat = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.buttons !== 1) return;
+    setAiChatWidth(Math.max(320, Math.min(760, window.innerWidth - event.clientX)));
   };
 
   const toggleAiSidebar = () => {
@@ -424,12 +427,12 @@ export default function RepoPilotDashboard() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {mobileMenuOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-[#30363d] bg-[#0d1117] px-3 py-4 transition-all lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} ${sidebarCollapsed ? "lg:w-[76px]" : "lg:w-[260px]"}`}>
+      <aside style={{ width: sidebarWidth }} className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-[#30363d] bg-[#0d1117] px-3 py-4 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className={`flex items-center gap-2 px-2 pb-4 ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f0f6fc] text-[#0d1117]"><Github size={22} /></div>
           {(!sidebarCollapsed || mobileMenuOpen) && <div className="min-w-0"><p className="text-sm font-semibold text-[#f0f6fc]">RepoPilot</p><p className="text-xs text-[#8b949e]">Your repository workspace</p></div>}
           <div className="ml-auto flex items-center gap-1">
-            <button className="hidden rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:inline-flex" onClick={toggleSidebar} aria-label="Collapse sidebar" title="Collapse sidebar"><Menu size={17} /></button>
+            
             <button className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
           </div>
         </div>
@@ -441,12 +444,14 @@ export default function RepoPilotDashboard() {
           <button onClick={() => { setAiSidebarOpen(true); setMobileMenuOpen(false); }} className="flex w-full items-center gap-2.5 rounded-md border-l-2 border-l-transparent px-2.5 py-2 text-left text-sm text-[#c9d1d9] transition hover:bg-[#161b22]" title="AI Talk"><Sparkles size={16} className="text-[#d2a8ff]" />{(!sidebarCollapsed || mobileMenuOpen) && "AI Talk"}</button>
           <button onClick={() => navigateTo("Settings")} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === "Settings" ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`} title="Settings"><Settings2 size={16} className={activeNav === "Settings" ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{(!sidebarCollapsed || mobileMenuOpen) && "Settings"}</button>
         </nav>
+        <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeSidebar(event); }} onPointerMove={resizeSidebar} className="absolute right-[-4px] top-0 z-50 hidden h-full w-2 cursor-col-resize touch-none bg-transparent hover:bg-[#58a6ff]/40 lg:block" />
       </aside>
 
-      <main className={`min-h-screen transition-all ${sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[260px]"}`}>
+      <main style={{ paddingLeft: sidebarWidth }} className="min-h-screen transition-[padding] duration-100">
         {aiSidebarOpen && <>
           <button aria-label="Close AI Talk" onClick={toggleAiSidebar} className="fixed inset-0 z-30 bg-black/40" />
-          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[460px] flex-col border-l border-[#30363d] bg-[#0d1117] shadow-2xl">
+          <aside style={{ width: aiChatWidth, maxWidth: "100vw" }} className="fixed inset-y-0 right-0 z-50 flex max-w-full flex-col border-l border-[#30363d] bg-[#0d1117] shadow-2xl">
+            <div role="separator" aria-orientation="vertical" aria-label="Resize AI chat" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeAiChat(event); }} onPointerMove={resizeAiChat} className="absolute left-[-4px] top-0 z-50 hidden h-full w-2 cursor-col-resize touch-none bg-transparent hover:bg-[#8957e5]/50 sm:block" />
             <div className="border-b border-[#30363d] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#8957e5]/40 bg-[#8957e5]/10 text-[#d2a8ff]"><Sparkles size={18}/></span><div><h2 className="text-base font-semibold text-[#f0f6fc]">AI Talk</h2><p className="text-xs text-[#8b949e]">Ask questions about a GitHub repository</p></div></div>
