@@ -244,7 +244,8 @@ export default function RepoPilotDashboard() {
           const parsed = JSON.parse(savedOrganization) as AiOrganization;
           if (Array.isArray(parsed.projects)) { setAiOrganization(parsed); setOrganizationMode("ai"); }
         } else { setAiOrganization(null); setOrganizationMode("manual"); }
-        setSidebarCollapsed(false); // Always open the navigation by default for a clearer first-time experience.
+        setSidebarCollapsed(false); // Expand navigation when the connected workspace loads.
+        setSidebarWidth(260);
         setAiSidebarOpen(localStorage.getItem(`repopilot-ai-sidebar:${data.username.toLowerCase()}`) === "true");
       } catch { /* Keep safe defaults if saved preferences are malformed. */ }
       setLastSynced(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
@@ -431,9 +432,11 @@ export default function RepoPilotDashboard() {
 
   const resizeSidebar = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.buttons !== 1) return;
-    const width = Math.max(68, Math.min(360, event.clientX));
-    setSidebarWidth(width);
-    setSidebarCollapsed(width < 150);
+    const requestedWidth = Math.min(360, event.clientX);
+    const collapsed = requestedWidth < 150;
+    // Snap to a true icon rail or keep enough room for the full navigation labels.
+    setSidebarCollapsed(collapsed);
+    setSidebarWidth(collapsed ? 76 : Math.max(200, requestedWidth));
   };
   const resizeAiChat = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.buttons !== 1) return;
