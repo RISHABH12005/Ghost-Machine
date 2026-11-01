@@ -547,7 +547,7 @@ export default function RepoPilotDashboard() {
           {isOverviewPage && <section aria-label="Repository filters" className="mt-5 flex flex-wrap items-center gap-1 rounded-md border border-[#30363d] bg-[#0d1117] p-2">
             {([
               { label: "Repositories", value: repositories.length, icon: FolderGit2, filter: "All projects", activeClass: "border-[#58a6ff]/50 bg-[#1f3a5f]/50 text-[#79c0ff]" },
-              { label: "In progress", value: inProgressCount, icon: GitBranch, filter: "In progress", activeClass: "border-[#1f6feb]/60 bg-[#1f3a5f]/50 text-[#79c0ff]" },
+              { label: "In progress", value: inProgressCount, icon: GitBranch, filter: "In progress", activeClass: "border-[#8957e5]/70 bg-[#2b1f45]/70 text-[#d2a8ff]" },
               { label: "Needs attention", value: attentionCount, icon: ShieldAlert, filter: "Needs attention", activeClass: "border-[#d29922]/60 bg-[#3d2e12]/60 text-[#e3b341]" },
               { label: "Completed", value: completedCount, icon: Check, filter: "Completed", activeClass: "border-[#238636]/60 bg-[#12351f]/70 text-[#3fb950]" },
             ] as const).map((item) => {
