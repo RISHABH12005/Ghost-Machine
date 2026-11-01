@@ -25,7 +25,6 @@ const STATUS_STYLES: Record<ProjectStatus, string> = {
 };
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Priorities", icon: Zap },
 ];
 
 
