@@ -572,10 +572,29 @@ export default function RepoPilotDashboard() {
             {activity.length ? <ol className="mt-6 space-y-4">{activity.map((item) => <li key={item.id} className="border-l-2 border-[#30363d] pl-4"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="mt-6 rounded-md border border-dashed border-[#30363d] p-6 text-sm text-[#8b949e]">No activity has been recorded in this browser session yet.</p>}
           </section>}
 
-          {isSettingsPage && <section className="mt-7 max-w-3xl space-y-4">
-            <div><h1 className="text-2xl font-semibold">Settings</h1><p className="mt-2 text-sm text-[#8b949e]">Manage your connected account and local workspace preferences.</p></div>
-            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4"><h2 className="font-medium">GitHub account</h2><p className="mt-2 text-sm text-[#8b949e]">{githubUser ? `Connected as @${githubUser.login}` : "Not connected"}</p><a href={githubUser ? `https://github.com/${githubUser.login}` : "/api/auth/github"} target={githubUser ? "_blank" : undefined} rel={githubUser ? "noreferrer" : undefined} className="mt-3 inline-flex rounded-md border border-[#30363d] px-3 py-2 text-sm hover:bg-[#161b22]">{githubUser ? "Open GitHub profile" : "Connect GitHub"}</a></div>
-            <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4"><h2 className="font-medium">Saved project statuses</h2><p className="mt-2 text-sm text-[#8b949e]">Reset locally saved statuses for @{username}.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Not assessed" }))); }} className="mt-3 rounded-md border border-[#da3633]/60 px-3 py-2 text-sm text-[#ff7b72] hover:bg-[#da3633]/10">Reset saved statuses</button></div>
+          {isSettingsPage && <section className="mt-7 space-y-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+              <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1f6feb]/15 text-[#79c0ff]"><Github size={20}/></div>
+                  <div className="min-w-0 flex-1"><h2 className="font-semibold text-[#f0f6fc]">GitHub connection</h2><p className="mt-1 text-sm text-[#8b949e]">Your repositories are read from your connected GitHub account.</p><p className="mt-3 text-sm text-[#c9d1d9]">{githubUser ? <><span className="text-[#3fb950]">●</span> Connected as <strong>@{githubUser.login}</strong></> : "Not connected"}</p>
+                    <a href={githubUser ? "https://github.com/" + githubUser.login : "/api/auth/github"} target={githubUser ? "_blank" : undefined} rel={githubUser ? "noreferrer" : undefined} className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#30363d] px-3 py-2 text-sm hover:border-[#58a6ff] hover:bg-[#161b22]">{githubUser ? "Open GitHub profile" : "Connect GitHub"} <ExternalLink size={13}/></a></div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
+                <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#f0f6fc]">AI usage</h2><p className="mt-1 text-sm text-[#8b949e]">Successful AI requests recorded in this browser.</p></div><span className="rounded-lg bg-[#8957e5]/15 p-2 text-[#d2a8ff]"><Sparkles size={18}/></span></div>
+                <div className="mt-5 flex items-end gap-2"><span className="text-4xl font-semibold tracking-tight tabular-nums text-[#f0f6fc]">{aiUsage.total.toLocaleString()}</span><span className="pb-1 text-sm text-[#8b949e]">total requests</span></div>
+                <div className="mt-5 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#d2a8ff]">{aiUsage.chats}</p><p className="mt-1 text-xs text-[#8b949e]">AI chats</p></div>
+                  <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#79c0ff]">{aiUsage.summaries}</p><p className="mt-1 text-xs text-[#8b949e]">Summaries</p></div>
+                  <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#3fb950]">{aiUsage.organization}</p><p className="mt-1 text-xs text-[#8b949e]">Organize runs</p></div>
+                </div>
+                <p className="mt-3 text-[11px] leading-5 text-[#6e7681]">Counts start after this usage tracker is deployed. This is a request count, not token, time, or billing usage; it is stored locally and may not include activity from other devices.</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
+              <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#da3633]/10 text-[#ff7b72]"><Trash2 size={19}/></div><div className="min-w-0 flex-1"><h2 className="font-semibold text-[#f0f6fc]">Clear workspace data</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[#8b949e]">Remove locally saved project statuses, AI organization results, AI usage counts, and activity history for this browser. Your GitHub repositories and account are not deleted or disconnected.</p><button type="button" onClick={clearAllWorkspaceData} className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#da3633]/60 px-3.5 py-2 text-sm font-medium text-[#ff7b72] transition hover:bg-[#da3633]/10"><Trash2 size={14}/> Clear all workspace data</button></div></div>
+            </div>
           </section>}
 
           <footer className="mt-10 flex flex-col gap-2 border-t border-[#30363d] py-5 text-xs text-[#8b949e] sm:flex-row sm:items-center sm:justify-between"><span>RepoPilot · Ghost-Machine</span><span className="inline-flex items-center gap-1.5"><BookOpen size={13} />{lastSynced ? "GitHub repositories synchronized" : "Waiting for repository import"}</span></footer>
