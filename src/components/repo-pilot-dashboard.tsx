@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2,
+  Activity, AlertCircle, Bell, BookOpen, Check, CheckCircle2, ChevronRight,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, Menu,
   Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X, Zap, PanelRightOpen, PanelRightClose,
@@ -438,13 +438,18 @@ export default function RepoPilotDashboard() {
         </div>
         {(!sidebarCollapsed || mobileMenuOpen) && <div className="mt-5 px-2 text-xs font-semibold text-[#8b949e]">Workspace</div>}
         <nav className="mt-2 space-y-1">
-          {navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{(!sidebarCollapsed || mobileMenuOpen) && label}{label === "Priorities" && attentionCount > 0 && }</button>)}
+          {navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => navigateTo(label)} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === label ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Icon size={16} className={activeNav === label ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{(!sidebarCollapsed || mobileMenuOpen) && label}</button>)}
         </nav>
         <nav className="mt-2 space-y-1">
           <button onClick={() => { setAiSidebarOpen(true); setMobileMenuOpen(false); }} className="flex w-full items-center gap-2.5 rounded-md border-l-2 border-l-transparent px-2.5 py-2 text-left text-sm text-[#c9d1d9] transition hover:bg-[#161b22]" title="AI Talk"><Sparkles size={16} className="text-[#d2a8ff]" />{(!sidebarCollapsed || mobileMenuOpen) && "AI Talk"}</button>
           <button onClick={() => navigateTo("Settings")} className={`flex w-full items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-left text-sm transition ${activeNav === "Settings" ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`} title="Settings"><Settings2 size={16} className={activeNav === "Settings" ? "text-[#f0f6fc]" : "text-[#8b949e]"} />{(!sidebarCollapsed || mobileMenuOpen) && "Settings"}</button>
         </nav>
         <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeSidebar(event); }} onPointerMove={resizeSidebar} className="absolute right-[-4px] top-0 z-50 hidden h-full w-2 cursor-col-resize touch-none bg-transparent hover:bg-[#58a6ff]/40 lg:block" />
+        <div className="absolute -right-3 top-1/2 z-[60] hidden -translate-y-1/2 lg:block">
+          <button type="button" onClick={() => { const nextCollapsed = !sidebarCollapsed; setSidebarCollapsed(nextCollapsed); setSidebarWidth(nextCollapsed ? 76 : 260); }} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="flex h-10 w-6 items-center justify-center rounded-full border border-[#30363d] bg-[#161b22] text-[#8b949e] shadow-lg transition hover:border-[#58a6ff] hover:bg-[#1f2937] hover:text-[#e6edf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff]">
+            <ChevronRight size={15} className={sidebarCollapsed ? "" : "rotate-180"} />
+          </button>
+        </div>
       </aside>
 
       <main style={{ paddingLeft: sidebarWidth }} className="min-h-screen transition-[padding] duration-100">
