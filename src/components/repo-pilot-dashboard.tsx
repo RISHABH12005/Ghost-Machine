@@ -483,15 +483,21 @@ export default function RepoPilotDashboard() {
 
           {error && <div role="alert" className="mt-4 flex items-start gap-2 rounded-md border border-[#da3633]/50 bg-[#da3633]/10 p-3 text-sm text-[#ff7b72]"><AlertCircle size={17} className="mt-0.5 shrink-0" /><div className="flex-1">{error}</div><button onClick={() => void importRepositories()} className="font-medium underline underline-offset-4">Retry</button></div>}
 
-          {isOverviewPage && <section className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-[#30363d] bg-[#0d1117] px-4 py-3">
-            <Stat label="Repositories" value={repositories.length} icon={FolderGit2} />
-            <span className="hidden h-5 border-l border-[#30363d] sm:block" />
-            <Stat label="In progress" value={inProgressCount} icon={GitBranch} />
-            <span className="hidden h-5 border-l border-[#30363d] sm:block" />
-            <Stat label="Needs attention" value={attentionCount} icon={ShieldAlert} />
-            <span className="hidden h-5 border-l border-[#30363d] sm:block" />
-            <Stat label="Completed" value={completedCount} icon={Check} />
-            <span className="ml-auto hidden text-xs text-[#8b949e] lg:inline">{lastSynced ? `Last synced at ${lastSynced}` : "Waiting for import"}</span>
+          {isOverviewPage && <section aria-label="Repository filters" className="mt-5 flex flex-wrap items-center gap-1 rounded-md border border-[#30363d] bg-[#0d1117] p-2">
+            {([
+              { label: "Repositories", value: repositories.length, icon: FolderGit2, filter: "All projects", activeClass: "border-[#58a6ff]/50 bg-[#1f3a5f]/50 text-[#79c0ff]" },
+              { label: "In progress", value: inProgressCount, icon: GitBranch, filter: "In progress", activeClass: "border-[#1f6feb]/60 bg-[#1f3a5f]/50 text-[#79c0ff]" },
+              { label: "Needs attention", value: attentionCount, icon: ShieldAlert, filter: "Needs attention", activeClass: "border-[#d29922]/60 bg-[#3d2e12]/60 text-[#e3b341]" },
+              { label: "Completed", value: completedCount, icon: Check, filter: "Completed", activeClass: "border-[#238636]/60 bg-[#12351f]/70 text-[#3fb950]" },
+            ] as const).map((item) => {
+              const selected = filter === item.filter;
+              return <button key={item.label} type="button" aria-pressed={selected} onClick={() => { setFilter(selected && item.filter !== "All projects" ? "All projects" : item.filter); setQuery(""); }} className={`inline-flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] ${selected ? item.activeClass : "border-transparent text-[#8b949e] hover:border-[#30363d] hover:bg-[#161b22] hover:text-[#e6edf3]"}`}>
+                <item.icon size={15} className={selected ? "shrink-0" : "shrink-0 text-[#8b949e]"}/>
+                <span>{item.label}</span>
+                <span className={`font-semibold tabular-nums ${selected ? "text-current" : "text-[#e6edf3]"}`}>{item.value}</span>
+              </button>;
+            })}
+            <span className="ml-auto hidden px-2 text-xs text-[#8b949e] lg:inline">{lastSynced ? `Last synced at ${lastSynced}` : "Waiting for import"}</span>
           </section>}
 
           {isOverviewPage && <section className="mt-5 rounded-lg border border-[#30363d] bg-[#0d1117] p-5">
