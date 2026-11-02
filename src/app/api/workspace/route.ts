@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 import { randomUUID } from "node:crypto";
 import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
 
@@ -44,11 +44,25 @@ function safeWorkspace(value: unknown) {
   return { statuses, aiChatMessages: messages };
 }
 
+let sqlClient: ReturnType<typeof postgres> | undefined;
+
 function getSql() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL is not configured.");
-  // Leave enough time for Neon cold starts and transient connection setup.
-  return neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(25_000) } });
+  if (sqlClient) return sqlClient;
+
+  // Prefer Supabase. DATABASE_URL is a temporary rollback fallback during cutover.
+  const connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("SUPABASE_DATABASE_URL is not configured.");
+
+  sqlClient = postgres(connectionString, {
+    max: 2,
+    prepare: false,
+    ssl: "require",
+    connect_timeout: 15,
+    idle_timeout: 20,
+    connection: { application_name: "ghost-machine" },
+  });
+
+  return sqlClient;
 }
 
 function describeDatabaseError(error: unknown) {
@@ -150,7 +164,12 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ saved: true }, { headers: responseHeaders() });
   } catch (error) {
     const detail = describeDatabaseError(error);
-    console.error("[workspace] PUT failed", JSON.stringify({ ...detail, operation: "PUT", databaseConfigured: Boolean(process.env.DATABASE_URL) }));
+    console.error("[workspace] PUT failed", JSON.stringify({
+      ...detail,
+      operation: "PUT",
+      supabaseConfigured: Boolean(process.env.SUPABASE_DATABASE_URL),
+      temporaryFallbackConfigured: Boolean(process.env.DATABASE_URL),
+    }));
     return NextResponse.json({ error: "Could not save workspace data.", errorCode: detail.code || detail.name }, { status: 503, headers: responseHeaders() });
   }
 }

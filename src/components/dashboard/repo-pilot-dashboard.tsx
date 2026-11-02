@@ -247,7 +247,7 @@ export default function RepoPilotDashboard() {
   };
 
   const clearAllWorkspaceData = () => {
-    const confirmed = window.confirm("Clear all RepoPilot workspace data saved for this GitHub account? This resets project statuses, AI suggestions, AI usage counts, and activity history in Neon. It does not delete GitHub repositories or disconnect your GitHub account.");
+    const confirmed = window.confirm("Clear all RepoPilot workspace data saved for this GitHub account? This resets project statuses, AI suggestions, AI usage counts, and activity history in the workspace database. It does not delete GitHub repositories or disconnect your GitHub account.");
     if (!confirmed) return;
     try {
       Object.keys(localStorage).filter((key) => key.startsWith("repopilot-")).forEach((key) => localStorage.removeItem(key));
@@ -489,7 +489,7 @@ export default function RepoPilotDashboard() {
     const updated = repositories.map((repository) => repository.id === id ? { ...repository, status } : repository);
     if (previous && previous.status !== status) setActivity((items) => [{ id: `${id}-${Date.now()}`, message: `${previous.name}: ${previous.status} → ${status}`, time: new Date().toLocaleString() }, ...items].slice(0, 50));
     setRepositories(updated);
-    // The account-scoped workspace autosave persists status changes to Neon.
+    // The account-scoped workspace autosave persists status changes to the account workspace database.
   };
 
   const aiChatRepositories = useMemo(
@@ -771,8 +771,8 @@ export default function RepoPilotDashboard() {
                   <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#79c0ff]">{aiUsage.summaries}</p><p className="mt-1 text-xs text-[#8b949e]">Summaries</p></div>
                   <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#3fb950]">{aiUsage.organization}</p><p className="mt-1 text-xs text-[#8b949e]">Organize runs</p></div>
                 </div>
-                <p className="mt-3 text-[11px] leading-5 text-[#6e7681]">Counts start after account-backed tracking is deployed. This is a request count, not token, time, or billing usage; it is synchronized through Neon for this GitHub account.</p>
-                <p role="status" aria-live="polite" className={`mt-2 text-xs ${workspaceSaveStatus === "error" ? "text-[#ff7b72]" : workspaceSaveStatus === "saved" ? "text-[#3fb950]" : "text-[#8b949e]"}`}>{workspaceSaveStatus === "saving" ? "Saving workspace to Neon…" : workspaceSaveStatus === "saved" ? "Workspace saved to Neon" : workspaceSaveStatus === "error" ? "Neon save failed or timed out. Please retry; check Render logs for the database error." : "Waiting for workspace changes…"}</p>
+                <p className="mt-3 text-[11px] leading-5 text-[#6e7681]">Counts start after account-backed tracking is deployed. This is a request count, not token, time, or billing usage; it is synchronized through Supabase PostgreSQL for this GitHub account.</p>
+                <p role="status" aria-live="polite" className={`mt-2 text-xs ${workspaceSaveStatus === "error" ? "text-[#ff7b72]" : workspaceSaveStatus === "saved" ? "text-[#3fb950]" : "text-[#8b949e]"}`}>{workspaceSaveStatus === "saving" ? "Saving workspace…" : workspaceSaveStatus === "saved" ? "Workspace saved" : workspaceSaveStatus === "error" ? "Workspace save failed or timed out. Please retry; check Render logs for the database error." : "Waiting for workspace changes…"}</p>
               </div>
             </div>
             <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
