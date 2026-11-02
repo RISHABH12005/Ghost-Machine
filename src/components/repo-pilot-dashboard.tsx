@@ -225,7 +225,7 @@ export default function RepoPilotDashboard() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildWorkspacePayload()),
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(30_000),
       }).then(async (response) => {
         const result = await response.json().catch(() => ({})) as { error?: string };
         if (!response.ok) throw new Error(result.error || "Workspace save failed.");
