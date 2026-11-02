@@ -249,7 +249,6 @@ export default function RepoPilotDashboard() {
   const [organizationError, setOrganizationError] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(76);
-  const sidebarResizePointerId = useRef<number | null>(null);
   const [aiChatWidth, setAiChatWidth] = useState(460);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [aiChatRepositoryId, setAiChatRepositoryId] = useState<number | null>(null);
@@ -476,11 +475,10 @@ export default function RepoPilotDashboard() {
         if (savedSidebarPreference) {
           const preference = JSON.parse(savedSidebarPreference) as { collapsed?: boolean; width?: number };
           const collapsed = typeof preference.collapsed === "boolean" ? preference.collapsed : false;
-          const width = typeof preference.width === "number" && Number.isFinite(preference.width)
-            ? Math.max(76, Math.min(360, preference.width))
-            : collapsed ? 76 : 260;
           setSidebarCollapsed(collapsed);
-          setSidebarWidth(collapsed ? 76 : Math.max(200, width));
+          setSidebarWidth(collapsed ? 76 : 260);
+          // Normalize older custom-width preferences now that manual resizing is removed.
+          localStorage.setItem(sidebarPreferenceKey, JSON.stringify({ collapsed, width: collapsed ? 76 : 260 }));
         } else {
           // First visit keeps the existing expanded default; later visits restore the user's choice.
           setSidebarCollapsed(false);
@@ -756,42 +754,6 @@ export default function RepoPilotDashboard() {
     } catch { /* Keep the current in-memory sidebar state if browser storage is unavailable. */ }
   };
 
-  const applySidebarResize = (clientX: number) => {
-    const requestedWidth = Math.max(76, Math.min(360, clientX));
-    const collapsed = requestedWidth < 150;
-    // Snap to a true icon rail or keep enough room for the full navigation labels.
-    const nextWidth = collapsed ? 76 : Math.max(200, requestedWidth);
-    setSidebarCollapsed(collapsed);
-    setSidebarWidth(nextWidth);
-    saveSidebarPreference(collapsed, nextWidth);
-  };
-
-  const handleSidebarResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    sidebarResizePointerId.current = event.pointerId;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    applySidebarResize(event.clientX);
-  };
-
-  const handleSidebarResizeMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (sidebarResizePointerId.current !== event.pointerId) return;
-    applySidebarResize(event.clientX);
-  };
-
-  const handleSidebarResizeEnd = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (sidebarResizePointerId.current !== event.pointerId) return;
-    sidebarResizePointerId.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  const resetSidebarWidth = () => {
-    setSidebarCollapsed(false);
-    setSidebarWidth(260);
-    saveSidebarPreference(false, 260);
-  };
-
   const toggleSidebar = () => {
     const nextCollapsed = !sidebarCollapsed;
     const nextWidth = nextCollapsed ? 76 : 260;
@@ -836,13 +798,10 @@ export default function RepoPilotDashboard() {
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {mobileMenuOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
       <aside id="workspace-sidebar" style={{ width: mobileMenuOpen ? "min(280px, 85vw)" : sidebarWidth, boxSizing: "border-box" }} className={`fixed inset-y-0 left-0 z-40 flex flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-r border-[#30363d] bg-[#0d1117] py-4 transition-[width,transform] duration-200 ease-out lg:translate-x-0 ${sidebarCollapsed && !mobileMenuOpen ? "px-2" : "px-3"} ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className={`flex min-w-0 items-center gap-2 pb-4 ${sidebarCollapsed && !mobileMenuOpen ? "justify-center" : "px-2"}`}>
+        <div className={`relative flex w-full min-w-0 items-center gap-2 pb-4 ${sidebarCollapsed && !mobileMenuOpen ? "justify-center" : "px-2"}`}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f0f6fc] text-[#0d1117]"><Github size={22} /></div>
           {(!sidebarCollapsed || mobileMenuOpen) && <div className="min-w-0 flex-1 overflow-hidden"><p className="truncate text-sm font-semibold text-[#f0f6fc]">RepoPilot</p><p className="text-xs leading-4 text-[#8b949e]">Your repository workspace</p></div>}
-          <div className="ml-auto flex items-center gap-1">
-            
-            <button className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
-          </div>
+          <button className="absolute right-0 top-0 rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
         </div>
         {(!sidebarCollapsed || mobileMenuOpen) && <div className="mt-5 px-2 text-xs font-semibold text-[#8b949e]">Workspace</div>}
         <nav className="mt-2 space-y-1">
@@ -852,25 +811,6 @@ export default function RepoPilotDashboard() {
           <button type="button" onClick={() => { setMobileMenuOpen(false); router.push("/ai-talk"); }} title="AI Talk" aria-label="AI Talk" className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"} ${pathname === "/ai-talk" ? "border-l-[#8957e5] bg-[#211638] font-semibold text-[#e6d5ff]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Sparkles size={16} className="shrink-0 text-[#d2a8ff]" />{(!sidebarCollapsed || mobileMenuOpen) && <span className="truncate">AI Talk</span>}</button>
           <button type="button" onClick={() => navigateTo("Settings")} title="Settings" aria-label="Settings" className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"} ${activeNav === "Settings" ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Settings2 size={16} className={`shrink-0 ${activeNav === "Settings" ? "text-[#f0f6fc]" : "text-[#8b949e]"}`} />{(!sidebarCollapsed || mobileMenuOpen) && <span className="truncate">Settings</span>}</button>
         </nav>
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-          aria-valuemin={76}
-          aria-valuemax={360}
-          aria-valuenow={sidebarWidth}
-          onPointerDown={handleSidebarResizeStart}
-          onPointerMove={handleSidebarResizeMove}
-          onPointerUp={handleSidebarResizeEnd}
-          onPointerCancel={handleSidebarResizeEnd}
-          onLostPointerCapture={() => { sidebarResizePointerId.current = null; }}
-          onDoubleClick={resetSidebarWidth}
-          title="Drag to resize · Double-click to reset to 260px"
-          className="group absolute -right-1 top-0 z-40 hidden h-full w-2 cursor-col-resize touch-none select-none bg-transparent lg:block"
-        >
-          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-[3px] w-px bg-transparent transition-colors group-hover:bg-[#8957e5]/35 group-active:bg-[#a371f7]/70" />
-          <span aria-hidden="true" className="pointer-events-none absolute left-0 top-1/2 h-12 w-2 -translate-y-1/2 rounded-full border border-transparent bg-transparent transition-colors group-hover:border-[#8957e5]/35 group-hover:bg-[#8957e5]/10 group-active:border-[#a371f7]/60 group-active:bg-[#8957e5]/20" />
-        </div>
         <div className="absolute right-1 top-1/2 z-50 hidden -translate-y-1/2 lg:block">
           <button
             type="button"
