@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/github-session";
+import { SESSION_COOKIE } from "@/lib/auth/github-session";
 
 export async function POST() {
   const response = NextResponse.json({ success: true });
