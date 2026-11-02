@@ -13,6 +13,32 @@ type GitHubRepo = {
 type Issue = { number: number; title: string; state: string; html_url: string; pull_request?: unknown; labels?: Array<{ name: string }> };
 type Pull = { number: number; title: string; state: string; html_url: string; draft: boolean; updated_at: string };
 type Run = { name: string; status: string; conclusion: string | null; html_url: string; updated_at: string };
+type OllamaModel = { name?: string; model?: string };
+type OllamaTags = { models?: OllamaModel[] };
+
+async function selectOllamaModel(apiKey: string): Promise<string> {
+  const response = await fetch("https://ollama.com/api/tags", {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 400);
+    throw new Error(`Could not list Ollama Cloud models (HTTP ${response.status}). ${detail}`);
+  }
+  const catalog = await response.json() as OllamaTags;
+  const models = (catalog.models || []).map((item) => item.name || item.model).filter((name): name is string => Boolean(name));
+  if (!models.length) throw new Error("No Ollama Cloud models are available to this API key.");
+  const configured = process.env.OLLAMA_MODEL?.trim();
+  if (configured && models.some((name) => name.toLowerCase() === configured.toLowerCase())) return configured;
+  const preferences = ["gemma4:31b-cloud", "gemma4", "qwen3.5", "qwen3", "deepseek", "gpt-oss", "glm", "llama"];
+  for (const family of preferences) {
+    const match = models.find((name) => name.toLowerCase().includes(family));
+    if (match) return match;
+  }
+  return models[0];
+}
+
 
 async function githubGet<T>(url: string, token: string): Promise<T> {
   const response = await fetch(url, {
@@ -54,7 +80,7 @@ export async function POST(request: NextRequest) {
     if (readme?.content && readme.encoding === "base64") {
       try { readmeText = Buffer.from(readme.content.replace(/\n/g, ""), "base64").toString("utf8").slice(0, 10000); } catch { readmeText = ""; }
     }
-    const model = process.env.OLLAMA_MODEL?.trim() || "gemma4:31b-cloud";
+    const model = await selectOllamaModel(apiKey);
     const context = {
       repository: {
         name: repository.full_name, description: repository.description, language: repository.language,
@@ -83,7 +109,10 @@ export async function POST(request: NextRequest) {
     });
     if (response.status === 401 || response.status === 403) return NextResponse.json({ error: "Ollama Cloud rejected the API key. Check OLLAMA_API_KEY in Render." }, { status: 502 });
     if (response.status === 429) return NextResponse.json({ error: "Ollama Cloud rate or usage limit reached. Try again later." }, { status: 429 });
-    if (!response.ok) return NextResponse.json({ error: `Ollama Cloud request failed (HTTP ${response.status}).` }, { status: 502 });
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 500);
+      return NextResponse.json({ error: `Ollama Cloud request failed (HTTP ${response.status}). ${detail || "Check the selected model and API key access."}` }, { status: 502 });
+    }
     const result = await response.json() as { message?: { content?: string }; model?: string };
     const reply = result.message?.content?.trim();
     if (!reply) return NextResponse.json({ error: "Ollama Cloud returned an empty reply." }, { status: 502 });
