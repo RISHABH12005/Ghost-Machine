@@ -104,11 +104,11 @@ export async function loadWorkspaceAiChatMessages(githubLogin: string, repositor
   `;
   const raw = legacy[0]?.messages as unknown;
   const parsed = typeof raw === "string" ? JSON.parse(raw) as unknown : raw;
-  const legacyMessages = Array.isArray(parsed) ? parsed.flatMap((entry) => {
+  const legacyMessages: WorkspaceAiChatMessage[] = Array.isArray(parsed) ? parsed.flatMap((entry): WorkspaceAiChatMessage[] => {
     if (!entry || typeof entry !== "object") return [];
     const item = entry as Record<string, unknown>;
     if ((item.role !== "user" && item.role !== "assistant") || typeof item.content !== "string" || !item.content.trim()) return [];
-    return [{ role: item.role, content: item.content }];
+    return [{ role: item.role as WorkspaceAiChatMessage["role"], content: item.content }];
   }) : [];
   if (legacyMessages.length) {
     await sql.begin(async (transaction) => {
