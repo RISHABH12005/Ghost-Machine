@@ -1,12 +1,12 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  AlertCircle, ArrowLeft, BookOpen, Check, CheckCircle2, ChevronRight,
+  AlertCircle, ArrowLeft, BookOpen, Bot, Check, CheckCircle2, ChevronRight, Copy,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
-  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, RefreshCw,
-  Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
+  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, Plus, RefreshCw,
+  Search, Send, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/github/repository";
 
@@ -142,6 +142,9 @@ export default function RepoPilotDashboard() {
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatSending, setAiChatSending] = useState(false);
   const [aiChatError, setAiChatError] = useState("");
+  const [copiedChatIndex, setCopiedChatIndex] = useState<number | null>(null);
+  const aiChatEndRef = useRef<HTMLDivElement>(null);
+  const aiChatComposerRef = useRef<HTMLTextAreaElement>(null);
   const [aiUsage, setAiUsage] = useState({ total: 0, chats: 0, summaries: 0, organization: 0 });
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const [workspaceSaveStatus, setWorkspaceSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -453,10 +456,10 @@ export default function RepoPilotDashboard() {
     } finally { setSummarizingId(null); }
   };
 
-  const sendAiChatMessage = async () => {
-    const message = aiChatInput.trim();
+  const sendAiChatMessage = async (prompt?: string) => {
+    const message = (prompt ?? aiChatInput).trim();
     const selectedRepository = aiChatRepositories.find((item) => item.id === aiChatRepositoryId) || aiChatRepositories[0];
-    if (!message || !selectedRepository || aiChatSending) return;
+    if (!message || !selectedRepository || aiChatSending || message.length > 4000) return;
     const nextMessages = [...aiChatMessages, { role: "user" as const, content: message }];
     setAiChatMessages(nextMessages);
     setAiChatInput("");
@@ -474,10 +477,31 @@ export default function RepoPilotDashboard() {
       setAiChatMessages((items) => [...items, { role: "assistant", content: result.reply || "I couldn't generate a reply." }]);
       if (result.aiUsage) setAiUsage(result.aiUsage);
     } catch (cause) {
+      setAiChatMessages((items) => items.length && items[items.length - 1]?.role === "user" ? items.slice(0, -1) : items);
+      setAiChatInput(message);
       setAiChatError(cause instanceof Error ? cause.message : "AI Talk failed. Please try again.");
     } finally {
       setAiChatSending(false);
     }
+  };
+
+  const copyAiChatMessage = async (message: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopiedChatIndex(index);
+      window.setTimeout(() => setCopiedChatIndex((current) => current === index ? null : current), 1600);
+    } catch {
+      setAiChatError("Clipboard access was blocked by your browser. Select the answer and copy it manually.");
+    }
+  };
+
+  const startNewAiChat = () => {
+    if (aiChatSending) return;
+    setAiChatMessages([]);
+    setAiChatInput("");
+    setAiChatError("");
+    setCopiedChatIndex(null);
+    aiChatComposerRef.current?.focus();
   };
 
   const assessRepository = async (repository: Repository) => {
@@ -516,6 +540,10 @@ export default function RepoPilotDashboard() {
     const search = aiRepoSearch.trim().toLowerCase();
     return aiChatRepositories.filter((repository) => !search || repository.fullName.toLowerCase().includes(search));
   }, [aiChatRepositories, aiRepoSearch]);
+
+  useEffect(() => {
+    aiChatEndRef.current?.scrollIntoView({ behavior: aiChatSending ? "smooth" : "auto", block: "end" });
+  }, [aiChatMessages, aiChatSending, aiChatError]);
 
   const filteredRepositories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -606,48 +634,120 @@ export default function RepoPilotDashboard() {
       <main style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties} className="min-h-screen min-w-0 pl-0 transition-[padding] duration-200 lg:pl-[var(--sidebar-width)]">
         {(aiSidebarOpen || pathname === "/ai-talk") && <>
           {pathname !== "/ai-talk" && <button aria-label="Close AI Talk" onClick={toggleAiSidebar} className="fixed inset-0 z-30 bg-black/40" />}
-          <aside style={{ width: pathname === "/ai-talk" ? "100vw" : aiChatWidth, maxWidth: "100vw" }} className={`fixed z-50 flex max-w-full flex-col bg-[#0d1117] ${pathname === "/ai-talk" ? "inset-0" : "inset-y-0 right-0 border-l border-[#30363d] shadow-2xl"}`}>
+          <aside style={{ width: pathname === "/ai-talk" ? "100vw" : aiChatWidth, maxWidth: "100vw" }} className={`fixed z-50 flex h-[100dvh] max-w-full flex-col bg-[#0d1117] ${pathname === "/ai-talk" ? "inset-0" : "inset-y-0 right-0 border-l border-[#30363d] shadow-2xl"}`}>
             {pathname !== "/ai-talk" && <div role="separator" aria-orientation="vertical" aria-label="Resize AI chat" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeAiChat(event); }} onPointerMove={resizeAiChat} className="absolute left-[-4px] top-0 z-50 hidden h-full w-2 cursor-col-resize touch-none bg-transparent hover:bg-[#8957e5]/50 sm:block" />}
-            <div className="border-b border-[#30363d] p-4">
-              <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-3">
-                <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#8957e5]/40 bg-[#8957e5]/10 text-[#d2a8ff]"><Sparkles size={18}/></span><div><h2 className="text-base font-semibold text-[#f0f6fc]">AI Talk</h2><p className="text-xs text-[#8b949e]">Ask questions about a GitHub repository</p></div></div>
-                <button onClick={() => pathname === "/ai-talk" ? router.push("/dashboard") : toggleAiSidebar()} aria-label={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} title={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} className="inline-flex items-center gap-2 rounded-md border border-[#30363d] px-3 py-2 text-sm text-[#c9d1d9] hover:bg-[#21262d]">{pathname === "/ai-talk" ? <><ArrowLeft size={16}/>Back to dashboard</> : <X size={17}/>}</button>
-              </div>
-              <div className="mx-auto mt-5 w-full max-w-3xl">
-                <label className="mb-2 block text-xs font-medium text-[#8b949e]">Select one of your repositories</label>
-                <div className="relative">
-                  <button type="button" aria-haspopup="listbox" aria-expanded={aiRepoPickerOpen} onClick={() => { setAiRepoPickerOpen((open) => !open); setAiRepoSearch(""); }} disabled={!aiChatRepositories.length || aiChatSending} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-[#30363d] bg-[#161b22] px-3.5 text-left text-sm text-[#e6edf3] shadow-sm transition hover:border-[#8957e5]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5] disabled:cursor-not-allowed disabled:opacity-50">
-                    <span className="flex min-w-0 items-center gap-2.5"><Github size={16} className="shrink-0 text-[#8b949e]"/><span className="truncate">{selectedAiRepository?.fullName || "No personal repositories found"}</span></span>
-                    <ChevronRight size={16} className={`shrink-0 text-[#8b949e] transition-transform ${aiRepoPickerOpen ? "rotate-90" : ""}`}/>
-                  </button>
-                  {aiRepoPickerOpen && <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-xl border border-[#30363d] bg-[#161b22] shadow-2xl">
-                    <div className="border-b border-[#30363d] p-2.5">
-                      <div className="flex items-center gap-2 rounded-md border border-[#30363d] bg-[#0d1117] px-3"><Search size={14} className="shrink-0 text-[#8b949e]"/><input autoFocus value={aiRepoSearch} onChange={(event) => setAiRepoSearch(event.target.value)} placeholder="Search your repositories…" className="h-9 min-w-0 flex-1 bg-transparent text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681]"/></div>
-                      <p className="mt-2 px-1 text-[11px] text-[#8b949e]">{matchingAiRepositories.length} of {aiChatRepositories.length} personal repositories</p>
+
+            <header className="shrink-0 border-b border-[#30363d] bg-[#0d1117]">
+              <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#8957e5]/40 bg-[#8957e5]/10 text-[#d2a8ff] shadow-[0_0_24px_rgba(137,87,229,.12)]"><Sparkles size={19}/></span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-base font-semibold tracking-tight text-[#f0f6fc]">AI Talk</h2>
+                        <span className="rounded-full border border-[#238636]/30 bg-[#238636]/10 px-2 py-0.5 text-[10px] font-medium text-[#3fb950]">Repository-aware</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-[#8b949e]">Explore issues, pull requests, workflows and next steps</p>
                     </div>
-                    <div role="listbox" aria-label="Your GitHub repositories" className="max-h-64 overflow-y-auto p-1.5">
-                      {matchingAiRepositories.length ? matchingAiRepositories.map((repository) => <button key={repository.id} type="button" role="option" aria-selected={selectedAiRepository?.id === repository.id} onClick={() => { setAiChatRepositoryId(repository.id); setAiChatMessages([]); setAiChatError(""); setAiRepoPickerOpen(false); setAiRepoSearch(""); }} className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm transition ${selectedAiRepository?.id === repository.id ? "bg-[#8957e5]/15 text-[#e6d5ff]" : "text-[#c9d1d9] hover:bg-[#21262d]"}`}>
-                        <span className="min-w-0"><span className="block truncate">{repository.name}</span><span className="mt-0.5 block truncate text-[11px] text-[#8b949e]">{repository.fullName}</span></span>
-                        {selectedAiRepository?.id === repository.id && <Check size={15} className="shrink-0 text-[#d2a8ff]"/>}
-                      </button>) : <p className="px-3 py-6 text-center text-xs text-[#8b949e]">No matching repositories. Try another search.</p>}
-                    </div>
-                  </div>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button type="button" onClick={startNewAiChat} disabled={!aiChatMessages.length || aiChatSending} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10 hover:text-[#e6d5ff] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"><Plus size={14}/> <span className="hidden sm:inline">New chat</span></button>
+                    <button type="button" onClick={() => pathname === "/ai-talk" ? router.push("/dashboard") : toggleAiSidebar()} aria-label={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} title={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:bg-[#21262d] sm:px-3 sm:text-sm">{pathname === "/ai-talk" ? <><ArrowLeft size={15}/><span className="hidden sm:inline">Back to dashboard</span></> : <X size={16}/>}</button>
+                  </div>
                 </div>
-                <p className="mt-1.5 text-[11px] text-[#6e7681]">Only repositories owned by @{username || "your account"} are shown.</p>
+
+                <div className="mx-auto mt-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                  <div className="min-w-0">
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[.12em] text-[#8b949e]">Conversation context</label>
+                    <div className="relative">
+                      <button type="button" aria-haspopup="listbox" aria-expanded={aiRepoPickerOpen} onClick={() => { setAiRepoPickerOpen((open) => !open); setAiRepoSearch(""); }} disabled={!aiChatRepositories.length || aiChatSending} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-[#30363d] bg-[#161b22] px-3.5 text-left text-sm text-[#e6edf3] shadow-sm transition hover:border-[#8957e5]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5] disabled:cursor-not-allowed disabled:opacity-50">
+                        <span className="flex min-w-0 items-center gap-2.5"><Github size={16} className="shrink-0 text-[#8b949e]"/><span className="truncate">{selectedAiRepository?.fullName || "No personal repositories found"}</span></span>
+                        <ChevronRight size={16} className={`shrink-0 text-[#8b949e] transition-transform ${aiRepoPickerOpen ? "rotate-90" : ""}`}/>
+                      </button>
+                      {aiRepoPickerOpen && <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-40 overflow-hidden rounded-xl border border-[#30363d] bg-[#161b22] shadow-2xl">
+                        <div className="border-b border-[#30363d] p-2.5">
+                          <div className="flex items-center gap-2 rounded-lg border border-[#30363d] bg-[#0d1117] px-3"><Search size={14} className="shrink-0 text-[#8b949e]"/><input autoFocus value={aiRepoSearch} onChange={(event) => setAiRepoSearch(event.target.value)} placeholder="Search your repositories…" className="h-9 min-w-0 flex-1 bg-transparent text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681]"/></div>
+                          <p className="mt-2 px-1 text-[11px] text-[#8b949e]">{matchingAiRepositories.length} of {aiChatRepositories.length} personal repositories</p>
+                        </div>
+                        <div role="listbox" aria-label="Your GitHub repositories" className="max-h-64 overflow-y-auto p-1.5">
+                          {matchingAiRepositories.length ? matchingAiRepositories.map((repository) => <button key={repository.id} type="button" role="option" aria-selected={selectedAiRepository?.id === repository.id} onClick={() => { setAiChatRepositoryId(repository.id); setAiChatMessages([]); setAiChatError(""); setAiRepoPickerOpen(false); setAiRepoSearch(""); }} className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${selectedAiRepository?.id === repository.id ? "bg-[#8957e5]/15 text-[#e6d5ff]" : "text-[#c9d1d9] hover:bg-[#21262d]"}`}>
+                            <span className="min-w-0"><span className="block truncate">{repository.name}</span><span className="mt-0.5 block truncate text-[11px] text-[#8b949e]">{repository.fullName}</span></span>
+                            {selectedAiRepository?.id === repository.id && <Check size={15} className="shrink-0 text-[#d2a8ff]"/>}
+                          </button>) : <p className="px-3 py-6 text-center text-xs text-[#8b949e]">No matching repositories. Try another search.</p>}
+                        </div>
+                      </div>}
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-[#6e7681]">Answers are grounded in the selected repository&apos;s GitHub metadata and README.</p>
+                  </div>
+                  {selectedAiRepository && <div className="hidden items-center gap-2 pb-1 text-[11px] text-[#8b949e] sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#3fb950]"/>{selectedAiRepository.language || "GitHub repository"}<span className="text-[#484f58]">·</span>{selectedAiRepository.defaultBranch}</div>}
+                </div>
               </div>
-            </div>
-            <div className="mx-auto w-full max-w-5xl flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
-              {!aiChatRepositories.length ? <div className="rounded-lg border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">No repositories owned by your GitHub account were found. Sync GitHub or check your repository access.</div> : aiChatMessages.length === 0 ? <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4"><p className="text-sm font-semibold text-[#f0f6fc]">What would you like to know?</p><p className="mt-1 text-xs leading-5 text-[#8b949e]">Ask about this repository&apos;s purpose, open issues, pull requests, workflow runs, README, risks or next steps.</p><div className="mt-3 flex flex-wrap gap-2">{["Summarize this repository","What needs attention?","Explain the recent workflow failures","What should I work on next?"].map((suggestion) => <button key={suggestion} onClick={() => setAiChatInput(suggestion)} className="rounded-full border border-[#30363d] px-3 py-1.5 text-left text-xs text-[#c9d1d9] hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10">{suggestion}</button>)}</div></div> : aiChatMessages.map((message,index) => <div key={index} className={message.role === "user" ? "ml-8 rounded-xl rounded-br-sm bg-[#1f3a5f] p-3 text-sm text-[#f0f6fc]" : "mr-3 rounded-xl rounded-bl-sm border border-[#30363d] bg-[#161b22] p-3"}>{message.role === "assistant" ? <MarkdownContent content={message.content}/> : <p className="whitespace-pre-wrap leading-6">{message.content}</p>}</div>)}
-              {aiChatSending && <div className="flex items-center gap-2 text-xs text-[#8b949e]"><LoaderCircle size={14} className="animate-spin"/> RepoPilot AI is thinking…</div>}
-              {aiChatError && <div role="alert" className="rounded-md border border-[#da3633]/40 bg-[#da3633]/10 p-3 text-xs text-[#ff7b72]">{aiChatError}</div>}
-            </div>
-            <form onSubmit={(event) => { event.preventDefault(); void sendAiChatMessage(); }} className="border-t border-[#30363d] bg-[#0d1117] p-4"><div className="mx-auto w-full max-w-5xl">
-              <div className="flex items-end gap-2 rounded-xl border border-[#30363d] bg-[#161b22] p-2 focus-within:border-[#8957e5]">
-                <textarea value={aiChatInput} onChange={(event) => setAiChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder="Ask anything about this repository…" rows={2} maxLength={4000} disabled={!aiChatRepositories.length || aiChatSending} className="max-h-32 min-h-12 flex-1 resize-y bg-transparent px-2 py-1 text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
-                <button type="submit" disabled={!aiChatInput.trim() || !repositories.length || aiChatSending} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#8957e5] text-white hover:bg-[#a371f7] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message"><Sparkles size={16}/></button>
+            </header>
+
+            <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-7">
+                {!aiChatRepositories.length ? <div className="my-auto rounded-2xl border border-dashed border-[#30363d] bg-[#161b22]/60 p-6 text-center">
+                  <Github size={24} className="mx-auto text-[#8b949e]"/>
+                  <h3 className="mt-3 text-sm font-semibold text-[#f0f6fc]">No repositories available</h3>
+                  <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#8b949e]">Sync GitHub or check your repository access. AI Talk can answer questions after at least one repository is loaded.</p>
+                  <button type="button" onClick={() => void importRepositories()} className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg border border-[#30363d] px-3 text-xs font-medium text-[#c9d1d9] transition hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10"><RefreshCw size={13}/> Sync repositories</button>
+                </div> : aiChatMessages.length === 0 ? <section className="my-auto w-full py-4">
+                  <div className="mx-auto max-w-3xl text-center">
+                    <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#8957e5]/40 bg-[#8957e5]/10 text-[#d2a8ff] shadow-[0_0_45px_rgba(137,87,229,.13)]"><Bot size={27}/></span>
+                    <p className="mt-5 text-[11px] font-semibold uppercase tracking-[.18em] text-[#b794f6]">Your repository copilot</p>
+                    <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[#f0f6fc] sm:text-3xl">What are we working on today?</h3>
+                    <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-[#8b949e]">Ask RepoPilot to explore the project, investigate delivery risks, understand recent activity, or plan your next engineering task.</p>
+                    {selectedAiRepository && <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-3 py-1.5 text-xs text-[#c9d1d9]"><Github size={13} className="shrink-0 text-[#8b949e]"/><span className="truncate">{selectedAiRepository.fullName}</span></div>}
+                  </div>
+                  <div className="mx-auto mt-7 grid max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2">
+                    {[
+                      { title: "Understand this project", description: "Purpose, structure and technology", prompt: "Give me a clear overview of this repository, its purpose, main technologies, and current state.", icon: BookOpen },
+                      { title: "Find what needs attention", description: "Issues, blockers and delivery risks", prompt: "Review the available repository data and identify what needs attention first. Explain the evidence.", icon: ShieldAlert },
+                      { title: "Investigate workflow failures", description: "Recent GitHub Actions runs", prompt: "Explain the recent workflow failures in this repository and recommend how to investigate and fix them.", icon: GitBranch },
+                      { title: "Plan my next steps", description: "A practical engineering action plan", prompt: "Based on the available repository activity, what should I work on next? Give me a prioritized action plan.", icon: ListTodo },
+                    ].map(({ title, description, prompt, icon: Icon }) => <button key={title} type="button" disabled={!selectedAiRepository || aiChatSending} onClick={() => void sendAiChatMessage(prompt)} className="group flex min-h-[104px] items-start gap-3 rounded-2xl border border-[#30363d] bg-[#161b22]/85 p-4 text-left transition duration-150 hover:-translate-y-0.5 hover:border-[#8957e5]/65 hover:bg-[#211638]/65 hover:shadow-[0_10px_30px_rgba(0,0,0,.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5] disabled:cursor-not-allowed disabled:opacity-50">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#8957e5]/30 bg-[#8957e5]/10 text-[#d2a8ff] transition group-hover:bg-[#8957e5]/20"><Icon size={17}/></span>
+                      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-[#e6edf3]">{title}</span><span className="mt-1 block text-xs leading-5 text-[#8b949e]">{description}</span></span>
+                      <ChevronRight size={15} className="mt-1 shrink-0 text-[#6e7681] transition group-hover:translate-x-0.5 group-hover:text-[#d2a8ff]"/>
+                    </button>)}
+                  </div>
+                  <p className="mt-5 text-center text-[10px] text-[#6e7681]">Choose a prompt to start instantly, or write your own question below.</p>
+                </section> : <section aria-label="AI conversation" className="w-full space-y-5 pb-3">
+                  <div className="flex justify-center"><span className="rounded-full border border-[#30363d] bg-[#161b22] px-3 py-1 text-[10px] text-[#8b949e]">Conversation · {selectedAiRepository?.name || "Repository"}</span></div>
+                  {aiChatMessages.map((message, index) => message.role === "user" ? <div key={index} className="flex justify-end">
+                    <div className="max-w-[92%] sm:max-w-[82%]">
+                      <p className="mb-1.5 pr-1 text-right text-[10px] font-medium uppercase tracking-[.12em] text-[#8b949e]">You</p>
+                      <div className="rounded-2xl rounded-br-md border border-[#315783]/70 bg-[#1f3a5f] px-4 py-3 text-sm leading-6 text-[#f0f6fc] shadow-sm"><p className="whitespace-pre-wrap break-words">{message.content}</p></div>
+                    </div>
+                  </div> : <div key={index} className="flex items-start gap-3">
+                    <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#8957e5]/35 bg-[#8957e5]/10 text-[#d2a8ff]"><Bot size={16}/></span>
+                    <div className="min-w-0 max-w-[94%] flex-1 sm:max-w-[88%]">
+                      <div className="mb-1.5 flex items-center gap-2"><p className="text-[10px] font-semibold uppercase tracking-[.12em] text-[#b794f6]">RepoPilot AI</p><span className="text-[10px] text-[#6e7681]">Repository assistant</span><button type="button" onClick={() => void copyAiChatMessage(message.content, index)} className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[10px] text-[#8b949e] transition hover:bg-[#21262d] hover:text-[#e6edf3]" aria-label="Copy AI answer">{copiedChatIndex === index ? <Check size={12}/> : <Copy size={12}/>}<span>{copiedChatIndex === index ? "Copied" : "Copy"}</span></button></div>
+                      <div className="rounded-2xl rounded-tl-md border border-[#30363d] bg-[#161b22] px-4 py-3 shadow-sm"><MarkdownContent content={message.content}/></div>
+                    </div>
+                  </div>)}
+                  {aiChatSending && <div className="flex items-start gap-3" role="status" aria-live="polite">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#8957e5]/35 bg-[#8957e5]/10 text-[#d2a8ff]"><Bot size={16}/></span>
+                    <div className="rounded-2xl rounded-tl-md border border-[#30363d] bg-[#161b22] px-4 py-3"><div className="flex items-center gap-2 text-xs text-[#c9d1d9]"><LoaderCircle size={13} className="animate-spin text-[#d2a8ff]"/> RepoPilot is reviewing the repository…</div><div className="mt-2 flex gap-1"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#8957e5]"/><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#8957e5] [animation-delay:160ms]"/><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#8957e5] [animation-delay:320ms]"/></div></div>
+                  </div>}
+                  {aiChatError && <div role="alert" className="ml-11 flex flex-col gap-2 rounded-xl border border-[#da3633]/40 bg-[#da3633]/10 p-3 text-xs text-[#ff7b72] sm:flex-row sm:items-center sm:justify-between"><span>{aiChatError}</span><button type="button" onClick={() => void sendAiChatMessage()} disabled={!aiChatInput.trim() || aiChatSending} className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 self-start rounded-lg border border-[#da3633]/50 px-2.5 font-medium transition hover:bg-[#da3633]/10 disabled:opacity-40 sm:self-auto"><RefreshCw size={12}/> Retry</button></div>}
+                </section>}
+                <div ref={aiChatEndRef} />
               </div>
-              <p className="mt-2 text-[10px] text-[#6e7681]">AI answers use GitHub metadata, recent activity and README. Verify important recommendations.</p>
-            </div></form>
+            </main>
+
+            <footer className="shrink-0 border-t border-[#30363d] bg-[#0d1117]/95 p-3 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur sm:p-4">
+              <form onSubmit={(event) => { event.preventDefault(); void sendAiChatMessage(); }} className="mx-auto w-full max-w-5xl">
+                <div className="rounded-2xl border border-[#30363d] bg-[#161b22] p-2 shadow-[0_-10px_35px_rgba(0,0,0,.12)] transition focus-within:border-[#8957e5]/75 focus-within:shadow-[0_0_0_3px_rgba(137,87,229,.10)]">
+                  <textarea ref={aiChatComposerRef} value={aiChatInput} onChange={(event) => { setAiChatInput(event.target.value); if (aiChatError) setAiChatError(""); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder={selectedAiRepository ? `Ask anything about ${selectedAiRepository.name}…` : "Choose a repository to start asking questions…"} rows={2} maxLength={4000} disabled={!aiChatRepositories.length || aiChatSending} className="max-h-36 min-h-[54px] w-full resize-y bg-transparent px-3 py-2 text-sm leading-6 text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
+                  <div className="flex items-center justify-between gap-2 border-t border-[#30363d]/70 px-1 pt-2">
+                    <div className="flex min-w-0 items-center gap-3 text-[10px] text-[#6e7681]"><span className="hidden items-center gap-1 sm:inline-flex"><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Enter</kbd> to send</span><span className="hidden sm:inline">·</span><span><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Shift + Enter</kbd> for new line</span><span className={`hidden tabular-nums sm:inline ${aiChatInput.length > 3800 ? "text-[#e3b341]" : ""}`}>{aiChatInput.length.toLocaleString()} / 4,000</span></div>
+                    <button type="submit" disabled={!aiChatInput.trim() || !aiChatRepositories.length || aiChatSending || aiChatInput.length > 4000} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-[#8957e5] px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#a371f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a1ff] disabled:cursor-not-allowed disabled:opacity-40"><Send size={14}/><span>Send</span></button>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] text-[#6e7681]"><span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#3fb950]"/> AI answers use GitHub metadata, recent activity and README.</span><span>Verify important recommendations before acting.</span></div>
+              </form>
+            </footer>
           </aside>
         </>}
         {activePanel && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="panel-title" className="w-full max-w-lg rounded-xl border border-[#30363d] bg-[#0d1117] p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-[#8b949e]">REPOPILOT WORKSPACE</p><h2 id="panel-title" className="mt-2 text-xl font-semibold">{activePanel === "help" ? "How to use RepoPilot" : activePanel === "notifications" ? "Notifications" : activePanel === "activity" ? "Activity history" : "Settings"}</h2></div><button onClick={() => setActivePanel(null)} aria-label="Close dialog" className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d]"><X size={17} /></button></div>
