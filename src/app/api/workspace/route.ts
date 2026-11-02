@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const detail = describeDatabaseError(error);
     console.error("[workspace] GET failed", JSON.stringify({ ...detail, operation: "GET" }));
-    return NextResponse.json({ error: "Could not load saved workspace data.", errorCode: detail.code || detail.name }, { status: 503, headers: responseHeaders() });
+    return NextResponse.json({ error: "Could not load saved workspace data.", errorCode: detail.code || detail.name, errorDetail: detail.message.slice(0, 300) }, { status: 503, headers: responseHeaders() });
   }
 }
 
@@ -161,6 +161,7 @@ export async function PUT(request: NextRequest) {
         workspace = EXCLUDED.workspace,
         updated_at = now()
     `;
+    console.info("[workspace] PUT saved", JSON.stringify({ operation: "PUT", supabaseConfigured: Boolean(process.env.SUPABASE_DATABASE_URL) }));
     return NextResponse.json({ saved: true }, { headers: responseHeaders() });
   } catch (error) {
     const detail = describeDatabaseError(error);
@@ -170,6 +171,6 @@ export async function PUT(request: NextRequest) {
       supabaseConfigured: Boolean(process.env.SUPABASE_DATABASE_URL),
       temporaryFallbackConfigured: Boolean(process.env.DATABASE_URL),
     }));
-    return NextResponse.json({ error: "Could not save workspace data.", errorCode: detail.code || detail.name }, { status: 503, headers: responseHeaders() });
+    return NextResponse.json({ error: "Could not save workspace data.", errorCode: detail.code || detail.name, errorDetail: detail.message.slice(0, 300) }, { status: 503, headers: responseHeaders() });
   }
 }
