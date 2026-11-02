@@ -6,7 +6,7 @@ import {
   AlertCircle, ArrowLeft, BookOpen, Check, CheckCircle2, ChevronRight,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, RefreshCw,
-  Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
+  Menu, Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
 
@@ -488,8 +488,19 @@ export default function RepoPilotDashboard() {
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
+      {!mobileMenuOpen && <button
+        type="button"
+        onClick={() => setMobileMenuOpen(true)}
+        aria-label="Open navigation menu"
+        aria-controls="workspace-sidebar"
+        aria-expanded={false}
+        title="Open navigation"
+        className="fixed left-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-xl border border-[#30363d] bg-[#161b22]/95 text-[#e6edf3] shadow-lg backdrop-blur transition-colors hover:border-[#58a6ff] hover:bg-[#21262d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] lg:hidden"
+      >
+        <Menu size={21} />
+      </button>}
       {mobileMenuOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
-      <aside style={{ width: mobileMenuOpen ? "min(280px, 85vw)" : sidebarWidth, boxSizing: "border-box" }} className={`fixed inset-y-0 left-0 z-40 flex flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-r border-[#30363d] bg-[#0d1117] py-4 transition-[width,transform] duration-200 ease-out lg:translate-x-0 ${sidebarCollapsed && !mobileMenuOpen ? "px-2" : "px-3"} ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside id="workspace-sidebar" style={{ width: mobileMenuOpen ? "min(280px, 85vw)" : sidebarWidth, boxSizing: "border-box" }} className={`fixed inset-y-0 left-0 z-40 flex flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-r border-[#30363d] bg-[#0d1117] py-4 transition-[width,transform] duration-200 ease-out lg:translate-x-0 ${sidebarCollapsed && !mobileMenuOpen ? "px-2" : "px-3"} ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className={`flex min-w-0 items-center gap-2 pb-4 ${sidebarCollapsed && !mobileMenuOpen ? "justify-center" : "px-2"}`}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f0f6fc] text-[#0d1117]"><Github size={22} /></div>
           {(!sidebarCollapsed || mobileMenuOpen) && <div className="min-w-0 flex-1 overflow-hidden"><p className="truncate text-sm font-semibold text-[#f0f6fc]">RepoPilot</p><p className="text-xs leading-4 text-[#8b949e]">Your repository workspace</p></div>}
