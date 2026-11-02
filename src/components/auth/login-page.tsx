@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowUpRight,
   BarChart3,
@@ -49,21 +49,14 @@ const AUTH_ERRORS: Record<string, string> = {
   github_profile_failed: "RepoPilot could not retrieve your GitHub profile. Please try again.",
 };
 
-export default function LoginPage() {
+export default function LoginPage({ initialAuthError = "" }: { initialAuthError?: string }) {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [activeFeature, setActiveFeature] = useState<string | null>(null);
-  const [authError, setAuthError] = useState("");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const reason = params.get("auth_error");
-    if (reason) {
-      setAuthError(AUTH_ERRORS[reason] || "GitHub sign-in did not complete. Please try again.");
-      params.delete("auth_error");
-      const query = params.toString();
-      window.history.replaceState({}, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
-    }
-  }, []);
+  const [authError] = useState(
+    initialAuthError
+      ? AUTH_ERRORS[initialAuthError] || "GitHub sign-in did not complete. Please try again."
+      : "",
+  );
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#090d13] px-4 py-8 text-[#e6edf3] sm:px-5 sm:py-12">
