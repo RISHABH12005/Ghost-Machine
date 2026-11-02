@@ -37,6 +37,7 @@ I built RepoPilot using a modern web application stack:
 - **Next.js and React** for the application and user interface.
 - **TypeScript** for type-safe development.
 - **Tailwind CSS** for responsive styling.
+- **Supabase PostgreSQL** for per-account workspace state, connected server-side through the Session Pooler.
 - **GitHub API and GraphQL API** for repository information, contributions, issues, pull requests and workflow activity.
 - **Ollama Cloud** for AI-powered repository analysis.
 - **Gemma 4 (31B)** as the model used for generating repository summaries in the demonstrated configuration.
@@ -70,3 +71,7 @@ I wanted to build something that could look beyond the repository's name and des
 Source files are grouped by responsibility: Next.js routes and API handlers live in `src/app`, feature UI lives in `src/components`, shared server helpers live in `src/lib`, and domain types live in `src/types`. Supabase schema migrations are stored in `supabase/migrations`, while CI workflows remain in `.github/workflows`.
 
 See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the folder map and placement conventions.
+
+## Database Configuration
+
+Set `SUPABASE_DATABASE_URL` in the Render environment to the Supabase PostgreSQL **Session Pooler** URI (port `5432`). It is a server-only secret. Do not expose it through a `NEXT_PUBLIC_` variable or commit it to the repository. The workspace API uses a private PostgreSQL connection; the public Data API does not need access to the workspace table.
