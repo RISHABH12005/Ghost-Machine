@@ -143,29 +143,81 @@ export default function RepoPilotDashboard() {
   const [aiChatSending, setAiChatSending] = useState(false);
   const [aiChatError, setAiChatError] = useState("");
   const [aiUsage, setAiUsage] = useState({ total: 0, chats: 0, summaries: 0, organization: 0 });
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
 
+  const buildWorkspacePayload = useCallback(() => ({
+    aiUsage,
+    activity: activity.slice(0, 50),
+    aiSummaries,
+    aiOrganization,
+    assessments,
+    workspace: {
+      statuses: Object.fromEntries(repositories.map((repository) => [String(repository.id), repository.status])),
+      aiChatMessages: aiChatMessages.slice(-60),
+    },
+  }), [aiUsage, activity, aiSummaries, aiOrganization, assessments, repositories, aiChatMessages]);
 
   useEffect(() => {
-    if (!username) return;
-    try {
-      const saved = localStorage.getItem(`repopilot-ai-usage:${username.toLowerCase()}`);
-      if (!saved) { setAiUsage({ total: 0, chats: 0, summaries: 0, organization: 0 }); return; }
-      const parsed = JSON.parse(saved) as Partial<typeof aiUsage>;
-      setAiUsage({
-        total: Number(parsed.total) || 0,
-        chats: Number(parsed.chats) || 0,
-        summaries: Number(parsed.summaries) || 0,
-        organization: Number(parsed.organization) || 0,
-      });
-    } catch { setAiUsage({ total: 0, chats: 0, summaries: 0, organization: 0 }); }
+    if (!username) {
+      setWorkspaceHydrated(false);
+      return;
+    }
+    let active = true;
+    setWorkspaceHydrated(false);
+    void (async () => {
+      try {
+        const response = await fetch("/api/workspace", { cache: "no-store" });
+        const saved = await response.json() as {
+          error?: string;
+          aiUsage?: Partial<typeof aiUsage>;
+          activity?: typeof activity;
+          aiSummaries?: Record<number, AiRepositorySummary>;
+          aiOrganization?: AiOrganization | null;
+          assessments?: Record<number, RepositoryAssessment>;
+          workspace?: { statuses?: Record<string, ProjectStatus>; aiChatMessages?: Array<{ role: "user" | "assistant"; content: string }> };
+        };
+        if (!response.ok) throw new Error(saved.error || "Could not load saved workspace data.");
+        if (!active) return;
+        const usage = saved.aiUsage || {};
+        setAiUsage({
+          total: Number(usage.total) || 0,
+          chats: Number(usage.chats) || 0,
+          summaries: Number(usage.summaries) || 0,
+          organization: Number(usage.organization) || 0,
+        });
+        setActivity(Array.isArray(saved.activity) ? saved.activity : []);
+        setAiSummaries(saved.aiSummaries && typeof saved.aiSummaries === "object" ? saved.aiSummaries : {});
+        setAiOrganization(saved.aiOrganization && Array.isArray(saved.aiOrganization.projects) ? saved.aiOrganization : null);
+        setOrganizationMode(saved.aiOrganization && Array.isArray(saved.aiOrganization.projects) ? "ai" : "manual");
+        setAssessments(saved.assessments && typeof saved.assessments === "object" ? saved.assessments : {});
+        const statuses = saved.workspace?.statuses || {};
+        setRepositories((items) => items.map((repository) => ({
+          ...repository,
+          status: statuses[String(repository.id)] || repository.status,
+        })));
+        setAiChatMessages(Array.isArray(saved.workspace?.aiChatMessages) ? saved.workspace.aiChatMessages : []);
+        setWorkspaceHydrated(true);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "Could not load saved workspace data.");
+      }
+    })();
+    return () => { active = false; };
   }, [username]);
 
+  useEffect(() => {
+    if (!username || !workspaceHydrated) return;
+    const timer = window.setTimeout(() => {
+      void fetch("/api/workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildWorkspacePayload()),
+      }).catch(() => { /* Keep the workspace usable while the network recovers. */ });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [username, workspaceHydrated, buildWorkspacePayload]);
+
   const recordAiUsage = (kind: "chats" | "summaries" | "organization") => {
-    setAiUsage((current) => {
-      const next = { ...current, total: current.total + 1, [kind]: current[kind] + 1 };
-      try { localStorage.setItem(`repopilot-ai-usage:${username.toLowerCase()}`, JSON.stringify(next)); } catch { /* Keep the in-memory count. */ }
-      return next;
-    });
+    setAiUsage((current) => ({ ...current, total: current.total + 1, [kind]: current[kind] + 1 }));
   };
 
   const clearAllWorkspaceData = () => {
@@ -219,8 +271,17 @@ export default function RepoPilotDashboard() {
     setSigningOut(true);
     setError("");
     try {
+      if (username && workspaceHydrated) {
+        const saveResponse = await fetch("/api/workspace", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildWorkspacePayload()),
+        });
+        if (!saveResponse.ok) throw new Error("Could not save your workspace before signing out. Please try again.");
+      }
       const response = await fetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) throw new Error("Could not sign out. Please try again.");
+      setWorkspaceHydrated(false);
       setGithubUser(null);
       setRepositories([]);
       setUsername("");
@@ -244,23 +305,15 @@ export default function RepoPilotDashboard() {
         const retryAt = data.rateLimit?.retryAt ? ` Retry after ${new Date(data.rateLimit.retryAt).toLocaleTimeString()}.` : "";
         throw new Error((data.error || "Could not import repositories.") + retryAt);
       }
-      const savedStatuses: Record<string, ProjectStatus> = {};
-      try { Object.assign(savedStatuses, JSON.parse(localStorage.getItem(`repopilot-statuses:${data.username.toLowerCase()}`) || "{}")); } catch { /* Use defaults if local preferences are invalid. */ }
-      const imported: Repository[] = data.repositories.map((repository) => ({
+      setRepositories((current) => data.repositories.map((repository) => ({
         ...repository,
-        status: savedStatuses[String(repository.id)] || (repository.archived ? "On hold" : "Not assessed"),
+        status: current.find((item) => item.id === repository.id)?.status || (repository.archived ? "On hold" : "Not assessed"),
         note: "",
-      }));
-      setRepositories(imported);
+      })));
       setUsername(data.username);
+      setSidebarCollapsed(false); // Expand navigation when the connected workspace loads.
+      setSidebarWidth(260);
       try {
-        const savedOrganization = localStorage.getItem(`repopilot-ai-organization:${data.username.toLowerCase()}`);
-        if (savedOrganization) {
-          const parsed = JSON.parse(savedOrganization) as AiOrganization;
-          if (Array.isArray(parsed.projects)) { setAiOrganization(parsed); setOrganizationMode("ai"); }
-        } else { setAiOrganization(null); setOrganizationMode("manual"); }
-        setSidebarCollapsed(false); // Expand navigation when the connected workspace loads.
-        setSidebarWidth(260);
         setAiSidebarOpen(localStorage.getItem(`repopilot-ai-sidebar:${data.username.toLowerCase()}`) === "true");
       } catch { /* Keep safe defaults if saved preferences are malformed. */ }
       setLastSynced(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
@@ -322,7 +375,6 @@ export default function RepoPilotDashboard() {
       setAiOrganization(result);
       recordAiUsage("organization");
       setOrganizationMode("ai");
-      try { localStorage.setItem(`repopilot-ai-organization:${username.toLowerCase()}`, JSON.stringify(result)); } catch { /* AI suggestions remain available for this session. */ }
     } catch (cause) {
       setOrganizationError(cause instanceof Error ? cause.message : "AI organization failed.");
     } finally { setOrganizing(false); }
@@ -336,12 +388,8 @@ export default function RepoPilotDashboard() {
       status: suggestions.get(repository.id) || repository.status,
     }));
     setRepositories(updated);
-    try {
-      localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status]))));
-    } catch { /* Statuses still update for this session. */ }
     setActivity((items) => [{ id: `ai-apply-${Date.now()}`, message: `Applied AI status suggestions to ${aiOrganization.projects.length} repositories`, time: new Date().toLocaleString() }, ...items].slice(0, 50));
     setOrganizationMode("manual");
-    try { localStorage.removeItem(`repopilot-ai-organization:${username.toLowerCase()}`); } catch { /* Saved statuses are already persisted above. */ }
   };
 
   const summarizeRepository = async (repository: Repository) => {
@@ -415,7 +463,7 @@ export default function RepoPilotDashboard() {
     const updated = repositories.map((repository) => repository.id === id ? { ...repository, status } : repository);
     if (previous && previous.status !== status) setActivity((items) => [{ id: `${id}-${Date.now()}`, message: `${previous.name}: ${previous.status} → ${status}`, time: new Date().toLocaleString() }, ...items].slice(0, 50));
     setRepositories(updated);
-    try { localStorage.setItem(`repopilot-statuses:${username.toLowerCase()}`, JSON.stringify(Object.fromEntries(updated.map((repository) => [String(repository.id), repository.status])))); } catch { /* Status still updates for this session. */ }
+    // The account-scoped workspace autosave persists status changes to Neon.
   };
 
   const aiChatRepositories = useMemo(
@@ -562,7 +610,7 @@ export default function RepoPilotDashboard() {
           </aside>
         </>}
         {activePanel && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="panel-title" className="w-full max-w-lg rounded-xl border border-[#30363d] bg-[#0d1117] p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-[#8b949e]">REPOPILOT WORKSPACE</p><h2 id="panel-title" className="mt-2 text-xl font-semibold">{activePanel === "help" ? "How to use RepoPilot" : activePanel === "notifications" ? "Notifications" : activePanel === "activity" ? "Activity history" : "Settings"}</h2></div><button onClick={() => setActivePanel(null)} aria-label="Close dialog" className="rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d]"><X size={17} /></button></div>
-          {activePanel === "help" ? <div className="mt-5 space-y-3 text-sm leading-6 text-[#c9d1d9]"><p><strong>Import repositories:</strong> sign in with GitHub; your repositories load automatically.</p><p><strong>Search and filter:</strong> search by repository name, description, language, branch, or topic.</p><p><strong>Track progress:</strong> change a repository status. It is saved in this browser for that username.</p><p><strong>AI summaries:</strong> use the AI summary action on a repository to request an Ollama Cloud analysis. It uses repository metadata, issues, pull requests, and recent workflow runs—not source code.</p></div> : activePanel === "notifications" ? <div className="mt-5"><p className="text-sm text-[#8b949e]">{attentionCount ? `${attentionCount} project(s) marked for attention.` : "You have no projects marked as needing attention."}</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{repositories.filter((repo) => repo.status === "Needs attention").map((repo) => <a key={repo.id} href={repo.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border border-[#30363d] p-3 text-sm hover:bg-[#161b22]">{repo.name}<ExternalLink size={14} /></a>)}</div><button onClick={() => { setActivePanel(null); navigateTo("Priorities"); }} className="mt-4 rounded-md bg-[#238636] px-3 py-2 text-sm font-medium text-white hover:bg-[#2ea043]">View priorities</button></div> : activePanel === "activity" ? <div className="mt-5">{activity.length ? <ol className="max-h-80 space-y-3 overflow-y-auto">{activity.map((item) => <li key={item.id} className="border-l border-[#30363d] pl-3"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="rounded-md border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">No status changes in this session yet.</p>}</div> : <div className="mt-5 space-y-4"><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Connected GitHub account</p><p className="mt-1 text-xs text-[#8b949e]">{githubUser ? `Signed in as @${githubUser.login}. Repositories load automatically from this account.` : "Not connected. Sign in with GitHub to load your repositories automatically."}</p></div><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Reset saved statuses</p><p className="mt-1 text-xs text-[#8b949e]">Remove saved status preferences for @{username}.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Not assessed" }))); setActivity((items) => [{ id: `reset-${Date.now()}`, message: `Reset saved statuses for @${username}`, time: new Date().toLocaleString() }, ...items].slice(0, 50)); setActivePanel(null); }} className="mt-3 rounded-md border border-[#da3633]/60 px-3 py-1.5 text-xs text-[#ff7b72] hover:bg-[#da3633]/10">Reset statuses</button></div></div>}
+          {activePanel === "help" ? <div className="mt-5 space-y-3 text-sm leading-6 text-[#c9d1d9]"><p><strong>Import repositories:</strong> sign in with GitHub; your repositories load automatically.</p><p><strong>Search and filter:</strong> search by repository name, description, language, branch, or topic.</p><p><strong>Track progress:</strong> change a repository status. It is saved to your GitHub account workspace.</p><p><strong>AI summaries:</strong> use the AI summary action on a repository to request an Ollama Cloud analysis. It uses repository metadata, issues, pull requests, and recent workflow runs—not source code.</p></div> : activePanel === "notifications" ? <div className="mt-5"><p className="text-sm text-[#8b949e]">{attentionCount ? `${attentionCount} project(s) marked for attention.` : "You have no projects marked as needing attention."}</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{repositories.filter((repo) => repo.status === "Needs attention").map((repo) => <a key={repo.id} href={repo.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-md border border-[#30363d] p-3 text-sm hover:bg-[#161b22]">{repo.name}<ExternalLink size={14} /></a>)}</div><button onClick={() => { setActivePanel(null); navigateTo("Priorities"); }} className="mt-4 rounded-md bg-[#238636] px-3 py-2 text-sm font-medium text-white hover:bg-[#2ea043]">View priorities</button></div> : activePanel === "activity" ? <div className="mt-5">{activity.length ? <ol className="max-h-80 space-y-3 overflow-y-auto">{activity.map((item) => <li key={item.id} className="border-l border-[#30363d] pl-3"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="rounded-md border border-dashed border-[#30363d] p-5 text-sm text-[#8b949e]">No status changes in this session yet.</p>}</div> : <div className="mt-5 space-y-4"><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Connected GitHub account</p><p className="mt-1 text-xs text-[#8b949e]">{githubUser ? `Signed in as @${githubUser.login}. Repositories load automatically from this account.` : "Not connected. Sign in with GitHub to load your repositories automatically."}</p></div><div className="rounded-md border border-[#30363d] p-3"><p className="text-sm font-medium">Reset saved statuses</p><p className="mt-1 text-xs text-[#8b949e]">Remove saved status preferences for @{username}.</p><button onClick={() => { try { localStorage.removeItem(`repopilot-statuses:${username.toLowerCase()}`); } catch {} setRepositories((items) => items.map((repo) => ({ ...repo, status: repo.archived ? "On hold" : "Not assessed" }))); setActivity((items) => [{ id: `reset-${Date.now()}`, message: `Reset saved statuses for @${username}`, time: new Date().toLocaleString() }, ...items].slice(0, 50)); setActivePanel(null); }} className="mt-3 rounded-md border border-[#da3633]/60 px-3 py-1.5 text-xs text-[#ff7b72] hover:bg-[#da3633]/10">Reset statuses</button></div></div>}
           <div className="mt-6 flex justify-end border-t border-[#30363d] pt-4"><button onClick={() => setActivePanel(null)} className="rounded-md border border-[#30363d] px-3 py-1.5 text-sm hover:bg-[#21262d]">Close</button></div></section></div>}
 
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
@@ -670,8 +718,8 @@ export default function RepoPilotDashboard() {
           </section>}
 
           {isActivityPage && <section className="mt-7 rounded-lg border border-[#30363d] bg-[#0d1117] p-5">
-            <h1 className="text-2xl font-semibold">Activity history</h1><p className="mt-2 text-sm text-[#8b949e]">A record of project status changes and applied AI recommendations.</p>
-            {activity.length ? <ol className="mt-6 space-y-4">{activity.map((item) => <li key={item.id} className="border-l-2 border-[#30363d] pl-4"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="mt-6 rounded-md border border-dashed border-[#30363d] p-6 text-sm text-[#8b949e]">No activity has been recorded in this browser session yet.</p>}
+            <h1 className="text-2xl font-semibold">Activity history</h1><p className="mt-2 text-sm text-[#8b949e]">Saved account-wide across sign-ins and devices.</p>
+            {activity.length ? <ol className="mt-6 space-y-4">{activity.map((item) => <li key={item.id} className="border-l-2 border-[#30363d] pl-4"><p className="text-sm">{item.message}</p><p className="mt-1 text-xs text-[#8b949e]">{item.time}</p></li>)}</ol> : <p className="mt-6 rounded-md border border-dashed border-[#30363d] p-6 text-sm text-[#8b949e]">No saved activity has been recorded for this account yet.</p>}
           </section>}
 
           {isSettingsPage && <section className="mt-7 space-y-5">
@@ -690,18 +738,18 @@ export default function RepoPilotDashboard() {
                 </div>
               </div>
               <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
-                <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#f0f6fc]">AI usage</h2><p className="mt-1 text-sm text-[#8b949e]">Successful AI requests recorded in this browser.</p></div><span className="rounded-lg bg-[#8957e5]/15 p-2 text-[#d2a8ff]"><Sparkles size={18}/></span></div>
+                <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#f0f6fc]">AI usage</h2><p className="mt-1 text-sm text-[#8b949e]">Successful AI requests saved to your GitHub account workspace.</p></div><span className="rounded-lg bg-[#8957e5]/15 p-2 text-[#d2a8ff]"><Sparkles size={18}/></span></div>
                 <div className="mt-5 flex items-end gap-2"><span className="text-4xl font-semibold tracking-tight tabular-nums text-[#f0f6fc]">{aiUsage.total.toLocaleString()}</span><span className="pb-1 text-sm text-[#8b949e]">total requests</span></div>
                 <div className="mt-5 grid grid-cols-3 gap-2">
                   <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#d2a8ff]">{aiUsage.chats}</p><p className="mt-1 text-xs text-[#8b949e]">AI chats</p></div>
                   <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#79c0ff]">{aiUsage.summaries}</p><p className="mt-1 text-xs text-[#8b949e]">Summaries</p></div>
                   <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#3fb950]">{aiUsage.organization}</p><p className="mt-1 text-xs text-[#8b949e]">Organize runs</p></div>
                 </div>
-                <p className="mt-3 text-[11px] leading-5 text-[#6e7681]">Counts start after this usage tracker is deployed. This is a request count, not token, time, or billing usage; it is stored locally and may not include activity from other devices.</p>
+                <p className="mt-3 text-[11px] leading-5 text-[#6e7681]">Counts start after account-backed tracking is deployed. This is a request count, not token, time, or billing usage; it is synchronized through Neon for this GitHub account.</p>
               </div>
             </div>
             <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
-              <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#da3633]/10 text-[#ff7b72]"><Trash2 size={19}/></div><div className="min-w-0 flex-1"><h2 className="font-semibold text-[#f0f6fc]">Clear workspace data</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[#8b949e]">Remove locally saved project statuses, AI organization results, AI usage counts, and activity history for this browser. Your GitHub repositories and account are not deleted or disconnected.</p><button type="button" onClick={clearAllWorkspaceData} className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#da3633]/60 px-3.5 py-2 text-sm font-medium text-[#ff7b72] transition hover:bg-[#da3633]/10"><Trash2 size={14}/> Clear all workspace data</button></div></div>
+              <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#da3633]/10 text-[#ff7b72]"><Trash2 size={19}/></div><div className="min-w-0 flex-1"><h2 className="font-semibold text-[#f0f6fc]">Clear workspace data</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[#8b949e]">Remove project statuses, AI organization results, AI summaries, assessments, AI usage counts, and activity history saved for this GitHub account. Your GitHub repositories and account are not deleted or disconnected.</p><button type="button" onClick={clearAllWorkspaceData} className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#da3633]/60 px-3.5 py-2 text-sm font-medium text-[#ff7b72] transition hover:bg-[#da3633]/10"><Trash2 size={14}/> Clear all workspace data</button></div></div>
             </div>
           </section>}
 
