@@ -84,7 +84,8 @@ export async function GET(request: NextRequest) {
       workspace: safeWorkspace(row.workspace),
       updatedAt: row.updated_at,
     }, { headers: responseHeaders() });
-  } catch {
+  } catch (error) {
+    console.error("[workspace] GET failed:", error);
     return NextResponse.json({ error: "Could not load saved workspace data. Check the database connection and try again." }, { status: 503, headers: responseHeaders() });
   }
 }
@@ -137,7 +138,8 @@ export async function PUT(request: NextRequest) {
         updated_at = now()
     `;
     return NextResponse.json({ saved: true }, { headers: responseHeaders() });
-  } catch {
+  } catch (error) {
+    console.error("[workspace] PUT failed:", error);
     return NextResponse.json({ error: "Could not save workspace data. Check the database connection and try again." }, { status: 503, headers: responseHeaders() });
   }
 }
