@@ -76,12 +76,45 @@ export async function POST(request: NextRequest) {
   try { body = await request.json() as typeof body; } catch { return NextResponse.json({ error: "Invalid chat request." }, { status: 400 }); }
   const owner = (body.owner || "").trim();
   const repoName = (body.repo || "").trim();
-  const messages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
+  const rawMessages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
   if (!/^[a-zA-Z0-9-]{1,39}$/.test(owner) || !/^[a-zA-Z0-9_.-]{1,100}$/.test(repoName) || repoName === "." || repoName === "..") {
     return NextResponse.json({ error: "Select a valid repository before starting AI Talk." }, { status: 400 });
   }
-  if (!messages.length || messages.some((message) => !["user", "assistant"].includes(message.role) || typeof message.content !== "string" || !message.content.trim() || message.content.length > 4000)) {
-    return NextResponse.json({ error: "Send a valid message (maximum 4,000 characters)." }, { status: 400 });
+
+  const latestMessage = rawMessages[rawMessages.length - 1] as Partial<ChatMessage> | undefined;
+  if (
+    !latestMessage ||
+    latestMessage.role !== "user" ||
+    typeof latestMessage.content !== "string" ||
+    !latestMessage.content.trim()
+  ) {
+    return NextResponse.json({ error: "Enter a non-empty message before sending." }, { status: 400 });
+  }
+  if (latestMessage.content.length > 4000) {
+    return NextResponse.json({ error: "Your message exceeds the 4,000-character limit. Please shorten it." }, { status: 400 });
+  }
+
+  // Only the newly submitted user message is subject to the input limit.
+  // Older assistant replies can be longer, so trim previous context instead
+  // of rejecting a short follow-up because of an earlier AI response.
+  const messages: ChatMessage[] = rawMessages.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const item = entry as Partial<ChatMessage>;
+    if (
+      (item.role !== "user" && item.role !== "assistant") ||
+      typeof item.content !== "string" ||
+      !item.content.trim()
+    ) return [];
+
+    const trimmedContent = item.content.trim();
+    const content = trimmedContent.length > 4000
+      ? `[Earlier message shortened to fit the conversation context.]\n${trimmedContent.slice(-4000)}`
+      : trimmedContent;
+
+    return [{ role: item.role, content }];
+  });
+  if (!messages.length || messages[messages.length - 1]?.role !== "user") {
+    return NextResponse.json({ error: "The conversation history is invalid. Please send your message again." }, { status: 400 });
   }
 
   try {
