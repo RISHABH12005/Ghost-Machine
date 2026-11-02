@@ -148,7 +148,6 @@ export default function RepoPilotDashboard() {
   const [workspaceSaveError, setWorkspaceSaveError] = useState("");
 
   const buildWorkspacePayload = useCallback(() => ({
-    aiUsage,
     activity: activity.slice(0, 50),
     aiSummaries,
     aiOrganization,
@@ -157,7 +156,7 @@ export default function RepoPilotDashboard() {
       statuses: Object.fromEntries(repositories.map((repository) => [String(repository.id), repository.status])),
       aiChatMessages: aiChatMessages.slice(-60),
     },
-  }), [aiUsage, activity, aiSummaries, aiOrganization, assessments, repositories, aiChatMessages]);
+  }), [activity, aiSummaries, aiOrganization, assessments, repositories, aiChatMessages]);
 
   useEffect(() => {
     if (!username) {
@@ -181,13 +180,11 @@ export default function RepoPilotDashboard() {
         };
         if (!response.ok) throw new Error(saved.error || "Could not load saved workspace data.");
         if (!active) return;
-        let usage = saved.aiUsage || {};
+        const usage = saved.aiUsage || {};
         let organization = saved.aiOrganization && Array.isArray(saved.aiOrganization.projects) ? saved.aiOrganization : null;
         const statuses: Record<string, ProjectStatus> = { ...(saved.workspace?.statuses || {}) };
         if (saved.exists === false) {
           try {
-            const legacyUsage = JSON.parse(localStorage.getItem(`repopilot-ai-usage:${username.toLowerCase()}`) || "null") as Partial<typeof aiUsage> | null;
-            if (legacyUsage && typeof legacyUsage === "object") usage = { ...usage, ...legacyUsage };
             const legacyStatuses = JSON.parse(localStorage.getItem(`repopilot-statuses:${username.toLowerCase()}`) || "{}") as Record<string, ProjectStatus>;
             Object.assign(statuses, legacyStatuses);
             const legacyOrganization = JSON.parse(localStorage.getItem(`repopilot-ai-organization:${username.toLowerCase()}`) || "null") as AiOrganization | null;
@@ -249,29 +246,38 @@ export default function RepoPilotDashboard() {
     return () => window.clearTimeout(timer);
   }, [username, workspaceHydrated, buildWorkspacePayload]);
 
-  const recordAiUsage = (kind: "chats" | "summaries" | "organization") => {
-    setAiUsage((current) => ({ ...current, total: current.total + 1, [kind]: current[kind] + 1 }));
-  };
-
-  const clearAllWorkspaceData = () => {
+  const clearAllWorkspaceData = async () => {
     const confirmed = window.confirm("Clear all RepoPilot workspace data saved for this GitHub account? This resets project statuses, AI suggestions, AI usage counts, and activity history in the workspace database. It does not delete GitHub repositories or disconnect your GitHub account.");
     if (!confirmed) return;
+
+    setWorkspaceSaveStatus("saving");
+    setWorkspaceSaveError("");
     try {
-      Object.keys(localStorage).filter((key) => key.startsWith("repopilot-")).forEach((key) => localStorage.removeItem(key));
-    } catch { /* Continue with in-memory reset if browser storage is unavailable. */ }
-    setRepositories((items) => items.map((item) => ({ ...item, status: item.archived ? "On hold" : "Not assessed" })));
-    setAiOrganization(null);
-    setOrganizationMode("manual");
-    setAiSummaries({});
-    setAssessments({});
-    setAiChatMessages([]);
-    setAiChatInput("");
-    setAiChatError("");
-    setAiUsage({ total: 0, chats: 0, summaries: 0, organization: 0 });
-    setActivity([]);
-    setOrganizationError("");
-    setQuery("");
-    setFilter("All projects");
+      const response = await fetch("/api/workspace", { method: "DELETE" });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Could not clear the saved workspace.");
+
+      try {
+        Object.keys(localStorage).filter((key) => key.startsWith("repopilot-")).forEach((key) => localStorage.removeItem(key));
+      } catch { /* Continue with the in-memory reset if browser storage is unavailable. */ }
+      setRepositories((items) => items.map((item) => ({ ...item, status: item.archived ? "On hold" : "Not assessed" })));
+      setAiOrganization(null);
+      setOrganizationMode("manual");
+      setAiSummaries({});
+      setAssessments({});
+      setAiChatMessages([]);
+      setAiChatInput("");
+      setAiChatError("");
+      setAiUsage({ total: 0, chats: 0, summaries: 0, organization: 0 });
+      setActivity([]);
+      setOrganizationError("");
+      setQuery("");
+      setFilter("All projects");
+      setWorkspaceSaveStatus("saved");
+    } catch (cause) {
+      setWorkspaceSaveError(cause instanceof Error ? cause.message : "Could not clear the saved workspace.");
+      setWorkspaceSaveStatus("error");
+    }
   };
 
   const navigateTo = (label: string) => {
@@ -403,10 +409,11 @@ export default function RepoPilotDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repositories }),
       });
-      const result = await response.json() as AiOrganization & { error?: string };
+      const result = await response.json() as AiOrganization & { error?: string; aiUsage?: typeof aiUsage };
       if (!response.ok) throw new Error(result.error || "AI organization failed.");
-      setAiOrganization(result);
-      recordAiUsage("organization");
+      const { aiUsage: usage, ...organization } = result;
+      setAiOrganization(organization);
+      if (usage) setAiUsage(usage);
       setOrganizationMode("ai");
     } catch (cause) {
       setOrganizationError(cause instanceof Error ? cause.message : "AI organization failed.");
@@ -436,10 +443,11 @@ export default function RepoPilotDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ owner, repo: name }),
       });
-      const result = await response.json() as AiRepositorySummary;
+      const result = await response.json() as AiRepositorySummary & { error?: string; aiUsage?: typeof aiUsage };
       if (!response.ok) throw new Error(result.error || "AI summary failed.");
-      setAiSummaries((items) => ({ ...items, [repository.id]: result }));
-      recordAiUsage("summaries");
+      const { aiUsage: usage, ...summary } = result;
+      setAiSummaries((items) => ({ ...items, [repository.id]: summary }));
+      if (usage) setAiUsage(usage);
     } catch (error) {
       setAiSummaries((items) => ({ ...items, [repository.id]: { summary: "", model: "", generatedAt: new Date().toISOString(), source: "", error: error instanceof Error ? error.message : "AI summary failed." } }));
     } finally { setSummarizingId(null); }
@@ -461,10 +469,10 @@ export default function RepoPilotDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ owner, repo: repoName, messages: nextMessages }),
       });
-      const result = await response.json() as { reply?: string; model?: string; error?: string };
+      const result = await response.json() as { reply?: string; model?: string; error?: string; aiUsage?: typeof aiUsage };
       if (!response.ok) throw new Error(result.error || "AI Talk could not respond.");
       setAiChatMessages((items) => [...items, { role: "assistant", content: result.reply || "I couldn't generate a reply." }]);
-      recordAiUsage("chats");
+      if (result.aiUsage) setAiUsage(result.aiUsage);
     } catch (cause) {
       setAiChatError(cause instanceof Error ? cause.message : "AI Talk failed. Please try again.");
     } finally {

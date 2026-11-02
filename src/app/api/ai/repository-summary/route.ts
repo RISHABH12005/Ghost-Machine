@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
+import { incrementWorkspaceAiUsage } from "@/lib/workspace/database";
 
 export const dynamic = "force-dynamic";
 
@@ -134,7 +135,9 @@ export async function POST(request: NextRequest) {
     const result = await response.json() as { message?: { content?: string }; model?: string };
     const summary = result.message?.content?.trim();
     if (!summary) return NextResponse.json({ error: "Ollama Cloud returned an empty analysis." }, { status: 502 });
-    return NextResponse.json({ summary, model: result.model || activeModel, generatedAt: new Date().toISOString(), source: "GitHub repository metadata, open issues, pull requests, and recent workflow runs" }, { headers: { "Cache-Control": "no-store" } });
+    const aiUsage = await incrementWorkspaceAiUsage(session.login, "summaries");
+    console.info("[ai-usage] Recorded successful repository summary", JSON.stringify({ kind: "summaries" }));
+    return NextResponse.json({ summary, model: result.model || activeModel, generatedAt: new Date().toISOString(), source: "GitHub repository metadata, open issues, pull requests, and recent workflow runs", aiUsage }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI analysis failed.";
     return NextResponse.json({ error: message.includes("timed out") ? "The GitHub or Ollama request timed out. Try again." : message }, { status: 502 });

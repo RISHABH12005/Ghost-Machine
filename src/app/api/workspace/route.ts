@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import postgres from "postgres";
 import { randomUUID } from "node:crypto";
+import { getWorkspaceSql } from "@/lib/workspace/database";
 import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
 
 export const dynamic = "force-dynamic";
@@ -44,26 +44,6 @@ function safeWorkspace(value: unknown) {
   return { statuses, aiChatMessages: messages };
 }
 
-let sqlClient: ReturnType<typeof postgres> | undefined;
-
-function getSql() {
-  if (sqlClient) return sqlClient;
-
-  // Prefer Supabase. DATABASE_URL is a temporary rollback fallback during cutover.
-  const connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("SUPABASE_DATABASE_URL is not configured.");
-
-  sqlClient = postgres(connectionString, {
-    max: 2,
-    prepare: false,
-    ssl: "require",
-    connect_timeout: 15,
-    idle_timeout: 20,
-    connection: { application_name: "ghost-machine" },
-  });
-
-  return sqlClient;
-}
 
 function describeDatabaseError(error: unknown) {
   const value = error !== null && typeof error === "object" ? error as Record<string, unknown> : {};
@@ -77,12 +57,30 @@ function responseHeaders() {
   return { "Cache-Control": "private, no-store, max-age=0" };
 }
 
+function isSameOriginRequest(request: NextRequest, operation: string) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+
+  // Render terminates public HTTPS and forwards requests to Next.js over HTTP.
+  const configuredOrigin = process.env.APP_ORIGIN || process.env.RENDER_EXTERNAL_URL;
+  try {
+    const expectedOrigin = configuredOrigin ? new URL(configuredOrigin).origin : new URL(request.url).origin;
+    const receivedOrigin = new URL(origin).origin;
+    if (receivedOrigin === expectedOrigin) return true;
+    console.warn("[workspace] Rejected cross-origin request", JSON.stringify({ operation, receivedOrigin, expectedOrigin }));
+    return false;
+  } catch {
+    console.warn("[workspace] Rejected invalid request origin", JSON.stringify({ operation }));
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
   if (!session) return NextResponse.json({ error: "Sign in with GitHub to load your saved workspace." }, { status: 401, headers: responseHeaders() });
 
   try {
-    const sql = getSql();
+    const sql = getWorkspaceSql();
     const rows = await sql`
       SELECT ai_usage, activity, ai_summaries, ai_organization, assessments, workspace, updated_at
       FROM public.ghost_machine_workspace_state
@@ -118,49 +116,30 @@ export async function PUT(request: NextRequest) {
   const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
   if (!session) return NextResponse.json({ error: "Sign in with GitHub to save your workspace." }, { status: 401, headers: responseHeaders() });
 
-  const origin = request.headers.get("origin");
-  if (origin) {
-    // Render terminates public HTTPS and forwards the request to Next.js over HTTP.
-    // request.url can therefore contain an internal origin. Compare against the
-    // configured public app origin instead of the internal upstream URL.
-    const configuredOrigin = process.env.APP_ORIGIN || process.env.RENDER_EXTERNAL_URL;
-    let expectedOrigin: string;
-    let receivedOrigin: string;
-    try {
-      expectedOrigin = configuredOrigin ? new URL(configuredOrigin).origin : new URL(request.url).origin;
-      receivedOrigin = new URL(origin).origin;
-    } catch {
-      console.warn("[workspace] Rejected invalid request origin", JSON.stringify({ operation: "PUT" }));
-      return NextResponse.json({ error: "Invalid workspace request origin." }, { status: 403, headers: responseHeaders() });
-    }
-    if (receivedOrigin !== expectedOrigin) {
-      console.warn("[workspace] Rejected cross-origin update", JSON.stringify({ operation: "PUT", receivedOrigin, expectedOrigin }));
-      return NextResponse.json({ error: "Cross-origin workspace updates are not allowed." }, { status: 403, headers: responseHeaders() });
-    }
+  if (!isSameOriginRequest(request, "PUT")) {
+    return NextResponse.json({ error: "Cross-origin workspace updates are not allowed." }, { status: 403, headers: responseHeaders() });
   }
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > 1_500_000) return NextResponse.json({ error: "Workspace data is too large to save." }, { status: 413, headers: responseHeaders() });
 
   try {
     const body = asRecord(await request.json());
-    const aiUsage = safeUsage(body.aiUsage);
     const activity = safeActivity(body.activity);
     const aiSummaries = asRecord(body.aiSummaries);
     const aiOrganization = asRecord(body.aiOrganization);
     const assessments = asRecord(body.assessments);
     const workspace = safeWorkspace(body.workspace);
-    const serialized = JSON.stringify({ aiUsage, activity, aiSummaries, aiOrganization, assessments, workspace });
+    const serialized = JSON.stringify({ activity, aiSummaries, aiOrganization, assessments, workspace });
     if (new TextEncoder().encode(serialized).byteLength > 1_500_000) {
       return NextResponse.json({ error: "Workspace data is too large to save." }, { status: 413, headers: responseHeaders() });
     }
 
-    const sql = getSql();
+    const sql = getWorkspaceSql();
     await sql`
       INSERT INTO public.ghost_machine_workspace_state
-        (github_login, ai_usage, activity, ai_summaries, ai_organization, assessments, workspace, updated_at)
+        (github_login, activity, ai_summaries, ai_organization, assessments, workspace, updated_at)
       VALUES (
         ${session.login.toLowerCase()},
-        ${JSON.stringify(aiUsage)}::jsonb,
         ${JSON.stringify(activity)}::jsonb,
         ${JSON.stringify(aiSummaries)}::jsonb,
         ${JSON.stringify(aiOrganization)}::jsonb,
@@ -169,7 +148,6 @@ export async function PUT(request: NextRequest) {
         now()
       )
       ON CONFLICT (github_login) DO UPDATE SET
-        ai_usage = EXCLUDED.ai_usage,
         activity = EXCLUDED.activity,
         ai_summaries = EXCLUDED.ai_summaries,
         ai_organization = EXCLUDED.ai_organization,
@@ -190,3 +168,41 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Could not save workspace data.", errorCode: detail.code || detail.name, errorDetail: detail.message.slice(0, 300) }, { status: 503, headers: responseHeaders() });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
+  if (!session) return NextResponse.json({ error: "Sign in with GitHub to clear your workspace." }, { status: 401, headers: responseHeaders() });
+  if (!isSameOriginRequest(request, "DELETE")) {
+    return NextResponse.json({ error: "Cross-origin workspace updates are not allowed." }, { status: 403, headers: responseHeaders() });
+  }
+
+  try {
+    const sql = getWorkspaceSql();
+    await sql`
+      INSERT INTO public.ghost_machine_workspace_state
+        (github_login, ai_usage, activity, ai_summaries, ai_organization, assessments, workspace, updated_at)
+      VALUES (
+        ${session.login.toLowerCase()},
+        ${JSON.stringify(EMPTY_USAGE)}::jsonb,
+        '[]'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+        '{"statuses":{},"aiChatMessages":[]}'::jsonb,
+        now()
+      )
+      ON CONFLICT (github_login) DO UPDATE SET
+        ai_usage = EXCLUDED.ai_usage,
+        activity = EXCLUDED.activity,
+        ai_summaries = EXCLUDED.ai_summaries,
+        ai_organization = EXCLUDED.ai_organization,
+        assessments = EXCLUDED.assessments,
+        workspace = EXCLUDED.workspace,
+        updated_at = now()
+    `;
+    console.info("[workspace] DELETE cleared", JSON.stringify({ operation: "DELETE" }));
+    return NextResponse.json({ cleared: true }, { headers: responseHeaders() });
+  } catch (error) {
+    const detail = describeDatabaseError(error);
+    console.error("[workspace] DELETE failed", JSON.stringify({ ...detail, operation: "DELETE" }));
+    return NextResponse.json({ error: "Could not clear saved workspace data.", errorCode: detail.code || detail.name }, { status: 503, headers: responseHeaders() });
+  }
+}
+
