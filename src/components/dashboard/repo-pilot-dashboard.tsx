@@ -8,7 +8,7 @@ import {
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, RefreshCw,
   Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
 } from "lucide-react";
-import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
+import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/github/repository";
 
 type AiRepositorySummary = { summary: string; model: string; generatedAt: string; source: string; error?: string };
 type AiProjectSuggestion = { id: number; status: ProjectStatus; priority: number; reason: string };

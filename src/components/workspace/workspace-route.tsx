@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { openSession, SESSION_COOKIE } from "@/lib/github-session";
-import RepoPilotDashboard from "@/components/repo-pilot-dashboard";
+import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
+import RepoPilotDashboard from "@/components/dashboard/repo-pilot-dashboard";
 
 export const dynamic = "force-dynamic";
 

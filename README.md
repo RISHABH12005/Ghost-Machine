@@ -64,3 +64,9 @@ A repository can look perfectly fine at first glance while hiding failed workflo
 I wanted to build something that could look beyond the repository's name and description, examine its activity and reveal what actually needs attention.
 
 **RepoPilot gives those hidden signals a voice.**
+
+## Project Structure
+
+Source files are grouped by responsibility: Next.js routes and API handlers live in `src/app`, feature UI lives in `src/components`, shared server helpers live in `src/lib`, and domain types live in `src/types`. Supabase schema migrations are stored in `supabase/migrations`, while CI workflows remain in `.github/workflows`.
+
+See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the folder map and placement conventions.

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 import { randomUUID } from "node:crypto";
-import { openSession, SESSION_COOKIE } from "@/lib/github-session";
+import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

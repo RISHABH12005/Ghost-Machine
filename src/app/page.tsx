@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { openSession, SESSION_COOKIE } from "@/lib/github-session";
-import LoginPage from "@/components/login-page";
+import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
+import LoginPage from "@/components/auth/login-page";
 
 export const dynamic = "force-dynamic";
 
