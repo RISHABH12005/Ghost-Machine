@@ -1,5 +1,5 @@
 -- Ghost-Machine workspace schema for Supabase PostgreSQL.
--- Safe to apply to a new Supabase project. Does not modify or delete Neon data.
+-- Safe to apply to a new Supabase project. This migration only creates the Supabase workspace table.
 
 CREATE TABLE IF NOT EXISTS public.ghost_machine_workspace_state (
   github_login text PRIMARY KEY,
@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS public.ghost_machine_workspace_state (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Application access is server-side only through DATABASE_URL.
--- Do not expose database credentials or grant public/anon access.
+-- Application access is server-side only through the server-side SUPABASE_DATABASE_URL connection.
+-- Do not expose credentials or grant public/anon/authenticated access.
 ALTER TABLE public.ghost_machine_workspace_state ENABLE ROW LEVEL SECURITY;
 
 -- Verification queries (run after applying this migration):
