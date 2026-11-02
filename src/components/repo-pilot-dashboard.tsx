@@ -144,6 +144,7 @@ export default function RepoPilotDashboard() {
   const [aiChatError, setAiChatError] = useState("");
   const [aiUsage, setAiUsage] = useState({ total: 0, chats: 0, summaries: 0, organization: 0 });
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
+  const [workspaceSaveStatus, setWorkspaceSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const buildWorkspacePayload = useCallback(() => ({
     aiUsage,
@@ -219,18 +220,23 @@ export default function RepoPilotDashboard() {
   useEffect(() => {
     if (!username || !workspaceHydrated) return;
     const timer = window.setTimeout(() => {
+      setWorkspaceSaveStatus("saving");
       void fetch("/api/workspace", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildWorkspacePayload()),
-      }).then((response) => {
-        if (response.ok) {
-          const account = username.toLowerCase();
-          localStorage.removeItem(`repopilot-ai-usage:${account}`);
-          localStorage.removeItem(`repopilot-statuses:${account}`);
-          localStorage.removeItem(`repopilot-ai-organization:${account}`);
-        }
-      }).catch(() => { /* Keep the workspace usable while the network recovers. */ });
+      }).then(async (response) => {
+        const result = await response.json().catch(() => ({})) as { error?: string };
+        if (!response.ok) throw new Error(result.error || "Workspace save failed.");
+        const account = username.toLowerCase();
+        localStorage.removeItem(`repopilot-ai-usage:${account}`);
+        localStorage.removeItem(`repopilot-statuses:${account}`);
+        localStorage.removeItem(`repopilot-ai-organization:${account}`);
+        setWorkspaceSaveStatus("saved");
+      }).catch((cause) => {
+        console.error("[workspace] Autosave failed:", cause);
+        setWorkspaceSaveStatus("error");
+      });
     }, 500);
     return () => window.clearTimeout(timer);
   }, [username, workspaceHydrated, buildWorkspacePayload]);
