@@ -125,10 +125,13 @@ function StatusSelector({
   onChange: (status: ProjectStatus) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(Math.max(0, STATUS_OPTIONS.indexOf(status)));
   const rootRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     if (!open) return;
+    optionRefs.current[activeIndex]?.focus();
     const handlePointerDown = (event: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
     };
@@ -141,7 +144,7 @@ function StatusSelector({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [open, activeIndex]);
 
   return (
     <div ref={rootRef} className="relative inline-flex max-w-full">
@@ -151,7 +154,10 @@ function StatusSelector({
         aria-haspopup="listbox"
         aria-expanded={open}
         title={"Change status: " + status}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setActiveIndex(Math.max(0, STATUS_OPTIONS.indexOf(status)));
+          setOpen((current) => !current);
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
@@ -177,11 +183,30 @@ function StatusSelector({
             return (
               <button
                 key={option}
+                ref={(element) => { optionRefs.current[index] = element; }}
                 type="button"
                 role="option"
                 aria-selected={selected}
+                tabIndex={activeIndex === index ? 0 : -1}
+                onMouseEnter={() => setActiveIndex(index)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveIndex((current) => (current + 1) % STATUS_OPTIONS.length);
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveIndex((current) => (current - 1 + STATUS_OPTIONS.length) % STATUS_OPTIONS.length);
+                  } else if (event.key === "Home") {
+                    event.preventDefault();
+                    setActiveIndex(0);
+                  } else if (event.key === "End") {
+                    event.preventDefault();
+                    setActiveIndex(STATUS_OPTIONS.length - 1);
+                  }
+                }}
                 onClick={() => {
                   onChange(option);
+                  setActiveIndex(index);
                   setOpen(false);
                 }}
                 className={"flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8957e5] " + (selected ? STATUS_STYLES[option] + " bg-white/[.04]" : "text-[#c9d1d9] hover:bg-[#21262d]")}
@@ -967,7 +992,7 @@ export default function RepoPilotDashboard() {
             </div>
 
             {loading && repositories.length === 0 ? <div className="mt-4 flex items-center justify-center gap-3 rounded-md border border-[#30363d] px-6 py-16 text-sm text-[#8b949e]"><LoaderCircle className="animate-spin" size={18} />Loading your authorized GitHub repositories…</div> : filteredRepositories.length > 0 ? (
-              <div className="mt-4 overflow-hidden rounded-md border border-[#30363d]">
+              <div className="mt-4 overflow-visible rounded-md border border-[#30363d]">
                 {filteredRepositories.map((repository) => <article key={repository.id} className="border-b border-[#30363d] bg-[#0d1117] px-4 py-4 last:border-b-0 hover:bg-[#161b22]/70 sm:px-5">
                   <div className="flex flex-col gap-4">
                     <div className="flex min-w-0 gap-3">
