@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   try {
     for (let page = 1; page <= 10; page += 1) {
       const endpoint = useAuthenticatedRepos
-        ? `https://api.github.com/user/repos?visibility=all&affiliation=owner,collaborator,organization_member&per_page=100&page=${page}&sort=updated`
+        ? `https://api.github.com/user/repos?visibility=all&affiliation=owner&per_page=100&page=${page}&sort=updated`
         : `https://api.github.com/users/${encodeURIComponent(username)}/repos?per_page=100&page=${page}&sort=updated`;
       const response = await fetch(endpoint, {
         headers: {
