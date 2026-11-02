@@ -771,6 +771,7 @@ export default function RepoPilotDashboard() {
                   <div className="rounded-lg bg-[#161b22] p-3"><p className="text-xl font-semibold tabular-nums text-[#3fb950]">{aiUsage.organization}</p><p className="mt-1 text-xs text-[#8b949e]">Organize runs</p></div>
                 </div>
                 <p className="mt-3 text-[11px] leading-5 text-[#6e7681]">Counts start after account-backed tracking is deployed. This is a request count, not token, time, or billing usage; it is synchronized through Neon for this GitHub account.</p>
+                <p role="status" aria-live="polite" className={`mt-2 text-xs ${workspaceSaveStatus === "error" ? "text-[#ff7b72]" : workspaceSaveStatus === "saved" ? "text-[#3fb950]" : "text-[#8b949e]"}`}>{workspaceSaveStatus === "saving" ? "Saving workspace to Neon…" : workspaceSaveStatus === "saved" ? "Workspace saved to Neon" : workspaceSaveStatus === "error" ? "Could not save workspace to Neon. Check the app logs." : "Waiting for workspace changes…"}</p>
               </div>
             </div>
             <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
