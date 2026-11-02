@@ -16,6 +16,22 @@ type Run = { name: string; status: string; conclusion: string | null; html_url: 
 type OllamaModel = { name?: string; model?: string };
 type OllamaTags = { models?: OllamaModel[] };
 
+async function selectFallbackModel(apiKey: string, excluded: string): Promise<string | null> {
+  const response = await fetch("https://ollama.com/api/tags", {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+    cache: "no-store", signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) return null;
+  const catalog = await response.json() as OllamaTags;
+  const models = (catalog.models || []).map((item) => item.name || item.model).filter((name): name is string => Boolean(name));
+  const preferences = ["gemma4:31b-cloud", "gemma4", "qwen3.5", "qwen3", "deepseek", "gpt-oss", "glm", "llama"];
+  for (const family of preferences) {
+    const match = models.find((name) => name !== excluded && name.toLowerCase().includes(family));
+    if (match) return match;
+  }
+  return models.find((name) => name !== excluded) || null;
+}
+
 async function selectOllamaModel(apiKey: string): Promise<string> {
   const response = await fetch("https://ollama.com/api/tags", {
     headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
@@ -101,17 +117,27 @@ export async function POST(request: NextRequest) {
       "If asked about implementation details not present in context, say what is missing and suggest which file or code snippet the user can provide. Use Markdown for readable answers. Link to supplied GitHub URLs when relevant.",
       "Repository context:\n" + JSON.stringify(context),
     ].join("\n\n");
-    const response = await fetch("https://ollama.com/api/chat", {
+    const chatPayload = (activeModel: string) => JSON.stringify({ model: activeModel, messages: [{ role: "system", content: prompt }, ...messages.map((message) => ({ role: message.role, content: message.content }))], stream: false });
+    const sendToOllama = (activeModel: string) => fetch("https://ollama.com/api/chat", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ model, messages: [{ role: "system", content: prompt }, ...messages.map((message) => ({ role: message.role, content: message.content }))], stream: false }),
+      body: chatPayload(activeModel),
       cache: "no-store", signal: AbortSignal.timeout(90000),
     });
+    let activeModel = model;
+    let response = await sendToOllama(activeModel);
+    if (response.status === 404) {
+      const fallback = await selectFallbackModel(apiKey, activeModel);
+      if (fallback) {
+        activeModel = fallback;
+        response = await sendToOllama(activeModel);
+      }
+    }
     if (response.status === 401 || response.status === 403) return NextResponse.json({ error: "Ollama Cloud rejected the API key. Check OLLAMA_API_KEY in Render." }, { status: 502 });
     if (response.status === 429) return NextResponse.json({ error: "Ollama Cloud rate or usage limit reached. Try again later." }, { status: 429 });
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 500);
-      return NextResponse.json({ error: `Ollama Cloud request failed (HTTP ${response.status}). ${detail || "Check the selected model and API key access."}` }, { status: 502 });
+      return NextResponse.json({ error: `Ollama Cloud request failed (HTTP ${response.status}) using model "${activeModel}". ${detail || "Check the selected model and API key access."}` }, { status: 502 });
     }
     const result = await response.json() as { message?: { content?: string }; model?: string };
     const reply = result.message?.content?.trim();
