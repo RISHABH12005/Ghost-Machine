@@ -249,6 +249,7 @@ export default function RepoPilotDashboard() {
   const [organizationError, setOrganizationError] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(76);
+  const sidebarResizePointerId = useRef<number | null>(null);
   const [aiChatWidth, setAiChatWidth] = useState(460);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [aiChatRepositoryId, setAiChatRepositoryId] = useState<number | null>(null);
@@ -755,15 +756,40 @@ export default function RepoPilotDashboard() {
     } catch { /* Keep the current in-memory sidebar state if browser storage is unavailable. */ }
   };
 
-  const resizeSidebar = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.buttons !== 1) return;
-    const requestedWidth = Math.min(360, event.clientX);
+  const applySidebarResize = (clientX: number) => {
+    const requestedWidth = Math.max(76, Math.min(360, clientX));
     const collapsed = requestedWidth < 150;
     // Snap to a true icon rail or keep enough room for the full navigation labels.
     const nextWidth = collapsed ? 76 : Math.max(200, requestedWidth);
     setSidebarCollapsed(collapsed);
     setSidebarWidth(nextWidth);
     saveSidebarPreference(collapsed, nextWidth);
+  };
+
+  const handleSidebarResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    sidebarResizePointerId.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    applySidebarResize(event.clientX);
+  };
+
+  const handleSidebarResizeMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (sidebarResizePointerId.current !== event.pointerId) return;
+    applySidebarResize(event.clientX);
+  };
+
+  const handleSidebarResizeEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (sidebarResizePointerId.current !== event.pointerId) return;
+    sidebarResizePointerId.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const resetSidebarWidth = () => {
+    setSidebarCollapsed(false);
+    setSidebarWidth(260);
+    saveSidebarPreference(false, 260);
   };
 
   const toggleSidebar = () => {
@@ -826,9 +852,34 @@ export default function RepoPilotDashboard() {
           <button type="button" onClick={() => { setMobileMenuOpen(false); router.push("/ai-talk"); }} title="AI Talk" aria-label="AI Talk" className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"} ${pathname === "/ai-talk" ? "border-l-[#8957e5] bg-[#211638] font-semibold text-[#e6d5ff]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Sparkles size={16} className="shrink-0 text-[#d2a8ff]" />{(!sidebarCollapsed || mobileMenuOpen) && <span className="truncate">AI Talk</span>}</button>
           <button type="button" onClick={() => navigateTo("Settings")} title="Settings" aria-label="Settings" className={`flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md border-l-2 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] ${sidebarCollapsed && !mobileMenuOpen ? "justify-center px-0" : "gap-2.5 px-2.5 text-left"} ${activeNav === "Settings" ? "border-l-[#f78166] bg-[#161b22] font-semibold text-[#f0f6fc]" : "border-l-transparent text-[#c9d1d9] hover:bg-[#161b22]"}`}><Settings2 size={16} className={`shrink-0 ${activeNav === "Settings" ? "text-[#f0f6fc]" : "text-[#8b949e]"}`} />{(!sidebarCollapsed || mobileMenuOpen) && <span className="truncate">Settings</span>}</button>
         </nav>
-        <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeSidebar(event); }} onPointerMove={resizeSidebar} className="absolute right-0 top-0 z-40 hidden h-full w-1 cursor-col-resize touch-none bg-transparent transition-colors hover:bg-[#58a6ff]/50 lg:block" />
-        <div className="absolute right-1.5 top-1/2 z-50 hidden -translate-y-1/2 lg:block">
-          <button type="button" onClick={toggleSidebar} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="flex h-9 w-6 items-center justify-center rounded-full border border-[#30363d] bg-[#161b22] text-[#8b949e] shadow-lg transition hover:border-[#58a6ff] hover:bg-[#1f2937] hover:text-[#e6edf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff]">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuemin={76}
+          aria-valuemax={360}
+          aria-valuenow={sidebarWidth}
+          onPointerDown={handleSidebarResizeStart}
+          onPointerMove={handleSidebarResizeMove}
+          onPointerUp={handleSidebarResizeEnd}
+          onPointerCancel={handleSidebarResizeEnd}
+          onLostPointerCapture={() => { sidebarResizePointerId.current = null; }}
+          onDoubleClick={resetSidebarWidth}
+          title="Drag to resize · Double-click to reset to 260px"
+          className="group absolute -right-1 top-0 z-40 hidden h-full w-2 cursor-col-resize touch-none select-none bg-transparent lg:block"
+        >
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-[3px] w-px bg-transparent transition-colors group-hover:bg-[#8957e5]/35 group-active:bg-[#a371f7]/70" />
+          <span aria-hidden="true" className="pointer-events-none absolute left-0 top-1/2 h-12 w-2 -translate-y-1/2 rounded-full border border-transparent bg-transparent transition-colors group-hover:border-[#8957e5]/35 group-hover:bg-[#8957e5]/10 group-active:border-[#a371f7]/60 group-active:bg-[#8957e5]/20" />
+        </div>
+        <div className="absolute right-1 top-1/2 z-50 hidden -translate-y-1/2 lg:block">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!sidebarCollapsed}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="flex h-10 w-7 items-center justify-center rounded-full border border-[#30363d] bg-[#161b22] text-[#8b949e] shadow-lg transition hover:border-[#8957e5]/60 hover:bg-[#211638] hover:text-[#d2a8ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5]/70"
+          >
             <ChevronRight size={15} className={sidebarCollapsed ? "" : "rotate-180"} />
           </button>
         </div>
