@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertCircle, ArrowLeft, BookOpen, Bot, Check, CheckCircle2, ChevronRight, Copy,
-  CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
+  CircleDot, Clock3, ExternalLink, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, Plus, RefreshCw,
   Search, Send, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
 } from "lucide-react";
@@ -866,9 +866,8 @@ export default function RepoPilotDashboard() {
                 {organizationError && <p role="alert" className="mt-3 text-sm text-[#ff7b72]">{organizationError}</p>}
               </div>
             </section>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <label className="flex min-h-10 flex-1 items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 focus-within:border-[#2f81f7]"><Search size={16} className="shrink-0 text-[#8b949e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a repository…" className="w-full bg-transparent text-sm outline-none placeholder:text-[#6e7681]" aria-label="Search repositories" />{query && <button onClick={() => setQuery("")} aria-label="Clear search" className="text-[#8b949e] hover:text-[#e6edf3]"><X size={14} /></button>}</label>
-              <label className="flex min-h-10 items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 text-sm text-[#8b949e]"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)} className="max-w-[190px] bg-transparent py-1 text-sm text-[#c9d1d9] outline-none" aria-label="Filter by status"><option className="bg-[#161b22] text-[#e6edf3]">All projects</option>{STATUS_OPTIONS.map((status) => <option className="bg-[#161b22] text-[#e6edf3]" key={status}>{status}</option>)}</select></label>
+            <div className="mt-3">
+              <label className="flex min-h-10 w-full items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 focus-within:border-[#2f81f7]"><Search size={16} className="shrink-0 text-[#8b949e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a repository…" className="w-full bg-transparent text-sm outline-none placeholder:text-[#6e7681]" aria-label="Search repositories" />{query && <button onClick={() => setQuery("")} aria-label="Clear search" className="text-[#8b949e] hover:text-[#e6edf3]"><X size={14} /></button>}</label>
             </div>
 
             {loading && repositories.length === 0 ? <div className="mt-4 flex items-center justify-center gap-3 rounded-md border border-[#30363d] px-6 py-16 text-sm text-[#8b949e]"><LoaderCircle className="animate-spin" size={18} />Loading your authorized GitHub repositories…</div> : filteredRepositories.length > 0 ? (
