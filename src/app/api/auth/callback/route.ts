@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OAUTH_STATE_COOKIE, SESSION_COOKIE, sealSession } from "@/lib/github-session";
+import { OAUTH_STATE_COOKIE, SESSION_COOKIE, sealSession } from "@/lib/auth/github-session";
 
 export const dynamic = "force-dynamic";
 
