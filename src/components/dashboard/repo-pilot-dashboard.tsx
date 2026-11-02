@@ -178,7 +178,7 @@ function StatusSelector({
           className="absolute right-0 top-[calc(100%+7px)] z-40 w-52 overflow-hidden rounded-xl border border-[#3d444d] bg-[#161b22] p-1.5 shadow-[0_16px_42px_rgba(0,0,0,.55)]"
         >
           <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[.12em] text-[#8b949e]">Set project status</p>
-          {STATUS_OPTIONS.map((option) => {
+          {STATUS_OPTIONS.map((option, index) => {
             const selected = option === status;
             return (
               <button
