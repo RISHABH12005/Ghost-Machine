@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { randomUUID } from "node:crypto";
 import { openSession, SESSION_COOKIE } from "@/lib/github-session";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,7 @@ function safeActivity(value: unknown) {
   return value.slice(0, 50).flatMap((entry) => {
     const item = asRecord(entry);
     if (typeof item.message !== "string" || typeof item.time !== "string") return [];
-    return [{ id: typeof item.id === "string" ? item.id.slice(0, 120) : crypto.randomUUID(), message: item.message.slice(0, 1200), time: item.time.slice(0, 120) }];
+    return [{ id: typeof item.id === "string" ? item.id.slice(0, 120) : randomUUID(), message: item.message.slice(0, 1200), time: item.time.slice(0, 120) }];
   });
 }
 
