@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
-import { incrementWorkspaceAiUsage } from "@/lib/workspace/database";
+import {
+  clearWorkspaceAiChat,
+  loadWorkspaceAiChatMessages,
+  recordWorkspaceAiChatTurn,
+} from "@/lib/workspace/database";
 
 export const dynamic = "force-dynamic";
 
@@ -66,56 +70,99 @@ async function githubGet<T>(url: string, token: string): Promise<T> {
   return await response.json() as T;
 }
 
+const MODEL_CONTEXT_CHAR_BUDGET = 32_000;
+
+function isSameOriginRequest(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    const configuredOrigin = process.env.APP_ORIGIN || process.env.RENDER_EXTERNAL_URL;
+    const expectedOrigin = configuredOrigin ? new URL(configuredOrigin).origin : new URL(request.url).origin;
+    return new URL(origin).origin === expectedOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function validRepository(ownerValue: string | null, repoValue: string | null) {
+  const owner = (ownerValue || "").trim();
+  const repo = (repoValue || "").trim();
+  if (!/^[a-zA-Z0-9-]{1,39}$/.test(owner) || !/^[a-zA-Z0-9_.-]{1,100}$/.test(repo) || repo === "." || repo === "..") return null;
+  return { owner, repo, fullName: `${owner}/${repo}` };
+}
+
+/** Keep the most recent conversation context that fits; all turns remain stored in Supabase. */
+function selectModelContext(history: ChatMessage[], latestMessage: string): ChatMessage[] {
+  const latest: ChatMessage = { role: "user", content: latestMessage };
+  const selected: ChatMessage[] = [latest];
+  let usedChars = latestMessage.length;
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    const available = MODEL_CONTEXT_CHAR_BUDGET - usedChars;
+    if (available <= 0) break;
+    if (message.content.length <= available) {
+      selected.unshift(message);
+      usedChars += message.content.length;
+      continue;
+    }
+    if (available >= 256) {
+      selected.unshift({
+        role: message.role,
+        content: `[Earlier context shortened]\n${message.content.slice(-available)}`,
+      });
+    }
+    break;
+  }
+  return selected;
+}
+
+export async function GET(request: NextRequest) {
+  const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
+  if (!session) return NextResponse.json({ error: "Sign in with GitHub to load AI chat history." }, { status: 401 });
+  const repository = validRepository(request.nextUrl.searchParams.get("owner"), request.nextUrl.searchParams.get("repo"));
+  if (!repository) return NextResponse.json({ error: "Select a valid repository before loading chat history." }, { status: 400 });
+
+  try {
+    const messages = await loadWorkspaceAiChatMessages(session.login, repository.fullName);
+    return NextResponse.json({ messages }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+  } catch (error) {
+    console.error("[ai-chat] History load failed", error instanceof Error ? error.message : "Unknown error");
+    return NextResponse.json({ error: "Could not load saved chat history. Please retry." }, { status: 503 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
+  if (!session) return NextResponse.json({ error: "Sign in with GitHub to clear AI chat history." }, { status: 401 });
+  if (!isSameOriginRequest(request)) return NextResponse.json({ error: "Cross-origin chat updates are not allowed." }, { status: 403 });
+  const repository = validRepository(request.nextUrl.searchParams.get("owner"), request.nextUrl.searchParams.get("repo"));
+  if (!repository) return NextResponse.json({ error: "Select a valid repository before clearing chat history." }, { status: 400 });
+
+  try {
+    await clearWorkspaceAiChat(session.login, repository.fullName);
+    return NextResponse.json({ cleared: true }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+  } catch (error) {
+    console.error("[ai-chat] History clear failed", error instanceof Error ? error.message : "Unknown error");
+    return NextResponse.json({ error: "Could not clear this conversation. Please retry." }, { status: 503 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   const session = openSession(request.cookies.get(SESSION_COOKIE)?.value);
   if (!session) return NextResponse.json({ error: "Sign in with GitHub before using AI Talk." }, { status: 401 });
   const apiKey = process.env.OLLAMA_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Ollama Cloud is not configured. Add OLLAMA_API_KEY in Render Environment." }, { status: 503 });
 
-  let body: { owner?: string; repo?: string; messages?: ChatMessage[] };
+  let body: { owner?: string; repo?: string; message?: string };
   try { body = await request.json() as typeof body; } catch { return NextResponse.json({ error: "Invalid chat request." }, { status: 400 }); }
   const owner = (body.owner || "").trim();
   const repoName = (body.repo || "").trim();
-  const rawMessages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
+  const userMessage = typeof body.message === "string" ? body.message.trim() : "";
   if (!/^[a-zA-Z0-9-]{1,39}$/.test(owner) || !/^[a-zA-Z0-9_.-]{1,100}$/.test(repoName) || repoName === "." || repoName === "..") {
     return NextResponse.json({ error: "Select a valid repository before starting AI Talk." }, { status: 400 });
   }
-
-  const latestMessage = rawMessages[rawMessages.length - 1] as Partial<ChatMessage> | undefined;
-  if (
-    !latestMessage ||
-    latestMessage.role !== "user" ||
-    typeof latestMessage.content !== "string" ||
-    !latestMessage.content.trim()
-  ) {
-    return NextResponse.json({ error: "Enter a non-empty message before sending." }, { status: 400 });
-  }
-  if (latestMessage.content.length > 4000) {
-    return NextResponse.json({ error: "Your message exceeds the 4,000-character limit. Please shorten it." }, { status: 400 });
-  }
-
-  // Only the newly submitted user message is subject to the input limit.
-  // Older assistant replies can be longer, so trim previous context instead
-  // of rejecting a short follow-up because of an earlier AI response.
-  const messages: ChatMessage[] = rawMessages.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") return [];
-    const item = entry as Partial<ChatMessage>;
-    if (
-      (item.role !== "user" && item.role !== "assistant") ||
-      typeof item.content !== "string" ||
-      !item.content.trim()
-    ) return [];
-
-    const trimmedContent = item.content.trim();
-    const content = trimmedContent.length > 4000
-      ? `[Earlier message shortened to fit the conversation context.]\n${trimmedContent.slice(-4000)}`
-      : trimmedContent;
-
-    return [{ role: item.role, content }];
-  });
-  if (!messages.length || messages[messages.length - 1]?.role !== "user") {
-    return NextResponse.json({ error: "The conversation history is invalid. Please send your message again." }, { status: 400 });
-  }
+  if (!userMessage) return NextResponse.json({ error: "Enter a non-empty message before sending." }, { status: 400 });
 
   try {
     const root = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`;
@@ -131,6 +178,8 @@ export async function POST(request: NextRequest) {
       try { readmeText = Buffer.from(readme.content.replace(/\n/g, ""), "base64").toString("utf8").slice(0, 10000); } catch { readmeText = ""; }
     }
     const model = await selectOllamaModel(apiKey);
+    const history = await loadWorkspaceAiChatMessages(session.login, repository.full_name);
+    const messages = selectModelContext(history, userMessage);
     const context = {
       repository: {
         name: repository.full_name, description: repository.description, language: repository.language,
@@ -176,8 +225,8 @@ export async function POST(request: NextRequest) {
     const result = await response.json() as { message?: { content?: string }; model?: string };
     const reply = result.message?.content?.trim();
     if (!reply) return NextResponse.json({ error: "Ollama Cloud returned an empty reply." }, { status: 502 });
-    const aiUsage = await incrementWorkspaceAiUsage(session.login, "chats");
-    console.info("[ai-usage] Recorded successful AI chat", JSON.stringify({ kind: "chats" }));
+    const aiUsage = await recordWorkspaceAiChatTurn(session.login, repository.full_name, userMessage, reply);
+    console.info("[ai-usage] Recorded successful AI chat and persisted transcript", JSON.stringify({ kind: "chats" }));
     return NextResponse.json({ reply, model: result.model || activeModel, repository: repository.full_name, generatedAt: new Date().toISOString(), aiUsage }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI Talk failed.";
