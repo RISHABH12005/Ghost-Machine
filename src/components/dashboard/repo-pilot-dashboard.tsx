@@ -832,7 +832,7 @@ export default function RepoPilotDashboard() {
                       </button>
                       {aiRepoPickerOpen && <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-40 overflow-hidden rounded-xl border border-[#30363d] bg-[#161b22] shadow-2xl">
                         <div className="border-b border-[#30363d] p-2.5">
-                          <div className="flex items-center gap-2 rounded-lg border border-[#30363d] bg-[#0d1117] px-3"><Search size={14} className="shrink-0 text-[#8b949e]"/><input autoFocus value={aiRepoSearch} onChange={(event) => setAiRepoSearch(event.target.value)} placeholder="Search your repositories…" className="h-9 min-w-0 flex-1 bg-transparent text-sm text-[#e6edf3] outline-none placeholder:text-[#6e7681]"/></div>
+                          <div className="flex items-center gap-2 rounded-lg border border-[#30363d] bg-[#0d1117] px-3 transition-colors focus-within:border-[#8957e5]/70 focus-within:ring-2 focus-within:ring-[#8957e5]/15"><Search size={14} className="shrink-0 text-[#8b949e]"/><input autoFocus value={aiRepoSearch} onChange={(event) => setAiRepoSearch(event.target.value)} placeholder="Search your repositories…" className="h-9 min-w-0 flex-1 bg-transparent text-sm text-[#e6edf3] outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-[#6e7681]"/></div>
                           <p className="mt-2 px-1 text-[11px] text-[#8b949e]">{matchingAiRepositories.length} of {aiChatRepositories.length} personal repositories</p>
                         </div>
                         <div role="listbox" aria-label="Your GitHub repositories" className="max-h-64 overflow-y-auto p-1.5">
@@ -988,7 +988,7 @@ export default function RepoPilotDashboard() {
               </div>
             </section>
             <div className="mt-3">
-              <label className="flex min-h-10 w-full items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 focus-within:border-[#2f81f7]"><Search size={16} className="shrink-0 text-[#8b949e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a repository…" className="w-full bg-transparent text-sm outline-none placeholder:text-[#6e7681]" aria-label="Search repositories" />{query && <button onClick={() => setQuery("")} aria-label="Clear search" className="text-[#8b949e] hover:text-[#e6edf3]"><X size={14} /></button>}</label>
+              <label className="flex min-h-10 w-full items-center gap-2 rounded-md border border-[#30363d] bg-[#010409] px-3 transition-colors focus-within:border-[#8957e5]/70 focus-within:ring-2 focus-within:ring-[#8957e5]/15"><Search size={16} className="shrink-0 text-[#8b949e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a repository…" className="w-full bg-transparent text-sm outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-[#6e7681]" aria-label="Search repositories" />{query && <button onClick={() => setQuery("")} aria-label="Clear search" className="text-[#8b949e] hover:text-[#e6edf3]"><X size={14} /></button>}</label>
             </div>
 
             {loading && repositories.length === 0 ? <div className="mt-4 flex items-center justify-center gap-3 rounded-md border border-[#30363d] px-6 py-16 text-sm text-[#8b949e]"><LoaderCircle className="animate-spin" size={18} />Loading your authorized GitHub repositories…</div> : filteredRepositories.length > 0 ? (
