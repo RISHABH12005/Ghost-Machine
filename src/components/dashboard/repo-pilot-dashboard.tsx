@@ -209,7 +209,7 @@ export default function RepoPilotDashboard() {
           ...repository,
           status: statuses[String(repository.id)] || repository.status,
         })));
-        setAiChatMessages(Array.isArray(saved.workspace?.aiChatMessages) ? saved.workspace.aiChatMessages : []);
+        // Repository chat history loads separately from the persistent chat-history API.
         setWorkspaceHydrated(true);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load saved workspace data.");
@@ -496,6 +496,8 @@ export default function RepoPilotDashboard() {
 
   const startNewAiChat = async () => {
     if (aiChatSending || aiChatHistoryLoading || !selectedAiRepository) return;
+    const confirmed = window.confirm("Start a new chat? This permanently clears the saved conversation for this repository.");
+    if (!confirmed) return;
     const [owner, repoName] = selectedAiRepository.fullName.split("/");
     try {
       const params = new URLSearchParams({ owner, repo: repoName });
@@ -689,7 +691,7 @@ export default function RepoPilotDashboard() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <button type="button" onClick={startNewAiChat} disabled={!aiChatMessages.length || aiChatSending} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10 hover:text-[#e6d5ff] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"><Plus size={14}/> <span className="hidden sm:inline">New chat</span></button>
+                    <button type="button" onClick={startNewAiChat} disabled={!aiChatMessages.length || aiChatSending || aiChatHistoryLoading} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10 hover:text-[#e6d5ff] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"><Plus size={14}/> <span className="hidden sm:inline">New chat</span></button>
                     <button type="button" onClick={() => pathname === "/ai-talk" ? router.push("/dashboard") : toggleAiSidebar()} aria-label={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} title={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:bg-[#21262d] sm:px-3 sm:text-sm">{pathname === "/ai-talk" ? <><ArrowLeft size={15}/><span className="hidden sm:inline">Back to dashboard</span></> : <X size={16}/>}</button>
                   </div>
                 </div>
@@ -779,7 +781,7 @@ export default function RepoPilotDashboard() {
                 <div className="rounded-2xl border border-[#30363d] bg-[#161b22] p-2 shadow-[0_-10px_35px_rgba(0,0,0,.12)] transition focus-within:border-[#8957e5]/75 focus-within:shadow-[0_0_0_3px_rgba(137,87,229,.10)]">
                   <textarea ref={aiChatComposerRef} value={aiChatInput} onChange={(event) => { setAiChatInput(event.target.value); if (aiChatError) setAiChatError(""); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder={selectedAiRepository ? `Ask anything about ${selectedAiRepository.name}…` : "Choose a repository to start asking questions…"} rows={2} disabled={!aiChatRepositories.length || aiChatSending || aiChatHistoryLoading} className="max-h-36 min-h-[54px] w-full resize-y bg-transparent px-3 py-2 text-sm leading-6 text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
                   <div className="flex items-center justify-between gap-2 border-t border-[#30363d]/70 px-1 pt-2">
-                    <div className="flex min-w-0 items-center gap-3 text-[10px] text-[#6e7681]"><span className="hidden items-center gap-1 sm:inline-flex"><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Enter</kbd> to send</span><span className="hidden sm:inline">·</span><span><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Shift + Enter</kbd> for new line</span><span className={`hidden tabular-nums sm:inline ${aiChatInput.length > 3800 ? "text-[#e3b341]" : ""}`}>{aiChatInput.length.toLocaleString()} characters</span></div>
+                    <div className="flex min-w-0 items-center gap-3 text-[10px] text-[#6e7681]"><span className="hidden items-center gap-1 sm:inline-flex"><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Enter</kbd> to send</span><span className="hidden sm:inline">·</span><span><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Shift + Enter</kbd> for new line</span><span className={`hidden tabular-nums sm:inline `}>{aiChatInput.length.toLocaleString()} characters</span></div>
                     <button type="submit" disabled={!aiChatInput.trim() || !aiChatRepositories.length || aiChatSending || aiChatHistoryLoading} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-[#8957e5] px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#a371f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a1ff] disabled:cursor-not-allowed disabled:opacity-40"><Send size={14}/><span>Send</span></button>
                   </div>
                 </div>
