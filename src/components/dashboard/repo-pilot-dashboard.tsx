@@ -145,6 +145,7 @@ export default function RepoPilotDashboard() {
   const [aiUsage, setAiUsage] = useState({ total: 0, chats: 0, summaries: 0, organization: 0 });
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const [workspaceSaveStatus, setWorkspaceSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [workspaceSaveError, setWorkspaceSaveError] = useState("");
 
   const buildWorkspacePayload = useCallback(() => ({
     aiUsage,
@@ -220,6 +221,7 @@ export default function RepoPilotDashboard() {
   useEffect(() => {
     if (!username || !workspaceHydrated) return;
     const timer = window.setTimeout(() => {
+      setWorkspaceSaveError("");
       setWorkspaceSaveStatus("saving");
       void fetch("/api/workspace", {
         method: "PUT",
@@ -227,15 +229,20 @@ export default function RepoPilotDashboard() {
         body: JSON.stringify(buildWorkspacePayload()),
         signal: AbortSignal.timeout(30_000),
       }).then(async (response) => {
-        const result = await response.json().catch(() => ({})) as { error?: string };
-        if (!response.ok) throw new Error(result.error || "Workspace save failed.");
+        const result = await response.json().catch(() => ({})) as { error?: string; errorCode?: string; errorDetail?: string };
+        if (!response.ok) {
+          const details = [result.error, result.errorCode, result.errorDetail].filter(Boolean).join(" — ");
+          throw new Error(details || "Workspace save failed.");
+        }
         const account = username.toLowerCase();
         localStorage.removeItem(`repopilot-ai-usage:${account}`);
         localStorage.removeItem(`repopilot-statuses:${account}`);
         localStorage.removeItem(`repopilot-ai-organization:${account}`);
         setWorkspaceSaveStatus("saved");
       }).catch((cause) => {
+        const message = cause instanceof Error ? cause.message : "Workspace save failed.";
         console.error("[workspace] Autosave failed:", cause);
+        setWorkspaceSaveError(message);
         setWorkspaceSaveStatus("error");
       });
     }, 500);
@@ -773,6 +780,7 @@ export default function RepoPilotDashboard() {
                 </div>
                 <p className="mt-3 text-[11px] leading-5 text-[#6e7681]">Counts start after account-backed tracking is deployed. This is a request count, not token, time, or billing usage; it is synchronized through Supabase PostgreSQL for this GitHub account.</p>
                 <p role="status" aria-live="polite" className={`mt-2 text-xs ${workspaceSaveStatus === "error" ? "text-[#ff7b72]" : workspaceSaveStatus === "saved" ? "text-[#3fb950]" : "text-[#8b949e]"}`}>{workspaceSaveStatus === "saving" ? "Saving workspace…" : workspaceSaveStatus === "saved" ? "Workspace saved" : workspaceSaveStatus === "error" ? "Workspace save failed or timed out. Please retry; check Render logs for the database error." : "Waiting for workspace changes…"}</p>
+                {workspaceSaveStatus === "error" && workspaceSaveError && <p role="alert" className="mt-1 break-words text-xs text-[#ff7b72]">{workspaceSaveError}</p>}
               </div>
             </div>
             <div className="rounded-xl border border-[#30363d] bg-[#0d1117] p-5">
