@@ -68,12 +68,14 @@ export async function GET(request: NextRequest) {
     `;
     const row = rows[0] as JsonRecord | undefined;
     if (!row) return NextResponse.json({
+      exists: false,
       aiUsage: EMPTY_USAGE, activity: [], aiSummaries: {}, aiOrganization: null,
       assessments: {}, workspace: { statuses: {}, aiChatMessages: [] }, updatedAt: null,
     }, { headers: responseHeaders() });
 
     const organization = asRecord(row.ai_organization);
     return NextResponse.json({
+      exists: true,
       aiUsage: safeUsage(row.ai_usage),
       activity: safeActivity(row.activity),
       aiSummaries: asRecord(row.ai_summaries),
