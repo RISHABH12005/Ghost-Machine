@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
+// Each benefit tile is a keyboard-accessible control that expands its own explanation.
 const FEATURES = [
   {
     id: "privacy",
