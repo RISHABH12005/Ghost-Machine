@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
+import { incrementWorkspaceAiUsage } from "@/lib/workspace/database";
 
 export const dynamic = "force-dynamic";
 
@@ -142,7 +143,9 @@ export async function POST(request: NextRequest) {
     const result = await response.json() as { message?: { content?: string }; model?: string };
     const reply = result.message?.content?.trim();
     if (!reply) return NextResponse.json({ error: "Ollama Cloud returned an empty reply." }, { status: 502 });
-    return NextResponse.json({ reply, model: result.model || model, repository: repository.full_name, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+    const aiUsage = await incrementWorkspaceAiUsage(session.login, "chats");
+    console.info("[ai-usage] Recorded successful AI chat", JSON.stringify({ kind: "chats" }));
+    return NextResponse.json({ reply, model: result.model || activeModel, repository: repository.full_name, generatedAt: new Date().toISOString(), aiUsage }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI Talk failed.";
     return NextResponse.json({ error: message.includes("timed out") ? "GitHub or Ollama timed out. Please try again." : message }, { status: 502 });
