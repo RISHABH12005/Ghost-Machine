@@ -180,7 +180,7 @@ export default function RepoPilotDashboard() {
         };
         if (!response.ok) throw new Error(saved.error || "Could not load saved workspace data.");
         if (!active) return;
-        let usage = saved.aiUsage || {};
+        const usage = saved.aiUsage || {};
         let organization = saved.aiOrganization && Array.isArray(saved.aiOrganization.projects) ? saved.aiOrganization : null;
         const statuses: Record<string, ProjectStatus> = { ...(saved.workspace?.statuses || {}) };
         if (saved.exists === false) {
