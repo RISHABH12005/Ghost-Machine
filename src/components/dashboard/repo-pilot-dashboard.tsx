@@ -156,7 +156,7 @@ export default function RepoPilotDashboard() {
       statuses: Object.fromEntries(repositories.map((repository) => [String(repository.id), repository.status])),
       aiChatMessages: aiChatMessages.slice(-60),
     },
-  }), [aiUsage, activity, aiSummaries, aiOrganization, assessments, repositories, aiChatMessages]);
+  }), [activity, aiSummaries, aiOrganization, assessments, repositories, aiChatMessages]);
 
   useEffect(() => {
     if (!username) {
@@ -185,8 +185,6 @@ export default function RepoPilotDashboard() {
         const statuses: Record<string, ProjectStatus> = { ...(saved.workspace?.statuses || {}) };
         if (saved.exists === false) {
           try {
-            const legacyUsage = JSON.parse(localStorage.getItem(`repopilot-ai-usage:${username.toLowerCase()}`) || "null") as Partial<typeof aiUsage> | null;
-            if (legacyUsage && typeof legacyUsage === "object") usage = { ...usage, ...legacyUsage };
             const legacyStatuses = JSON.parse(localStorage.getItem(`repopilot-statuses:${username.toLowerCase()}`) || "{}") as Record<string, ProjectStatus>;
             Object.assign(statuses, legacyStatuses);
             const legacyOrganization = JSON.parse(localStorage.getItem(`repopilot-ai-organization:${username.toLowerCase()}`) || "null") as AiOrganization | null;
