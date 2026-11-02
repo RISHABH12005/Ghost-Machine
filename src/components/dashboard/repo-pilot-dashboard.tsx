@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  AlertCircle, ArrowLeft, BookOpen, Bot, Check, CheckCircle2, ChevronRight, Copy,
+  AlertCircle, ArrowLeft, BookOpen, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, Copy,
   CircleDot, Clock3, ExternalLink, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, Plus, RefreshCw,
   Search, Send, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
@@ -113,6 +113,89 @@ function relativeDate(value: string) {
 function StatusPill({ status }: { status: ProjectStatus }) {
   const Icon = status === "Completed" ? CheckCircle2 : status === "Needs attention" ? ShieldAlert : status === "In progress" ? CircleDot : status === "On hold" ? Clock3 : CircleDot;
   return <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLES[status]}`}><Icon size={12} />{status}</span>;
+}
+
+function StatusSelector({
+  status,
+  repositoryName,
+  onChange,
+}: {
+  status: ProjectStatus;
+  repositoryName: string;
+  onChange: (status: ProjectStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-flex max-w-full">
+      <button
+        type="button"
+        aria-label={"Change status for " + repositoryName}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={"Change status: " + status}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+          }
+        }}
+        className={"inline-flex min-h-9 max-w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold shadow-sm transition duration-150 hover:-translate-y-px hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8957e5]/70 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0d1117] " + STATUS_STYLES[status]}
+      >
+        <span aria-hidden="true" className={"h-2 w-2 shrink-0 rounded-full " + STATUS_DOT_STYLES[status]} />
+        <span className="truncate">{status}</span>
+        <ChevronDown size={13} className={"shrink-0 opacity-80 transition-transform duration-150 " + (open ? "rotate-180" : "")} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label={"Choose status for " + repositoryName}
+          className="absolute right-0 top-[calc(100%+7px)] z-40 w-52 overflow-hidden rounded-xl border border-[#3d444d] bg-[#161b22] p-1.5 shadow-[0_16px_42px_rgba(0,0,0,.55)]"
+        >
+          <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[.12em] text-[#8b949e]">Set project status</p>
+          {STATUS_OPTIONS.map((option) => {
+            const selected = option === status;
+            return (
+              <button
+                key={option}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(option);
+                  setOpen(false);
+                }}
+                className={"flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8957e5] " + (selected ? STATUS_STYLES[option] + " bg-white/[.04]" : "text-[#c9d1d9] hover:bg-[#21262d]")}
+              >
+                <span aria-hidden="true" className={"h-2.5 w-2.5 shrink-0 rounded-full " + STATUS_DOT_STYLES[option]} />
+                <span className="min-w-0 flex-1">{option}</span>
+                {selected && <Check size={13} className="shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function RepoPilotDashboard() {
@@ -906,13 +989,7 @@ export default function RepoPilotDashboard() {
                       <button type="button" title="Generate an AI summary for this repository" aria-busy={summarizingId === repository.id} onClick={() => void summarizeRepository(repository)} disabled={summarizingId !== null} className="group inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#8957e5]/50 bg-[#8957e5]/10 px-3 text-xs font-medium text-[#d2a8ff] shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-[#a371f7] hover:bg-[#8957e5]/20 hover:shadow-[0_4px_16px_rgba(137,87,229,.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a1ff] active:translate-y-0 active:scale-[.97] disabled:cursor-wait disabled:opacity-50">{summarizingId === repository.id ? <LoaderCircle size={13} className="animate-spin" /> : <Sparkles size={13} className="transition-transform group-hover:rotate-12" />}{summarizingId === repository.id ? "Generating…" : "AI summary"}</button>
                       <button type="button" title="Check repository activity and project health signals" aria-busy={assessingId === repository.id} onClick={() => void assessRepository(repository)} disabled={assessingId !== null} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#30363d] bg-[#161b22] px-3 text-xs font-medium text-[#c9d1d9] shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-[#8b949e] hover:bg-[#21262d] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] active:translate-y-0 active:scale-[.97] disabled:cursor-wait disabled:opacity-50">{assessingId === repository.id ? <LoaderCircle size={13} className="animate-spin" /> : <ShieldAlert size={13} />}{assessingId === repository.id ? "Assessing…" : "Assess"}</button>
                       {organizationMode === "manual" ? <>
-                        <label className="sr-only" htmlFor={`status-${repository.id}`}>Manual status for {repository.name}</label>
-                        <label className="inline-flex min-h-9 max-w-full items-center gap-2 rounded-lg border bg-[#161b22] px-2.5 shadow-sm transition hover:bg-[#21262d] focus-within:ring-2 focus-within:ring-[#8957e5]/25 ${STATUS_STYLES[repository.status]}" title="Change the manual project status">
-                          <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_STYLES[repository.status]}`}/>
-                          <select id={`status-${repository.id}`} value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className="min-w-0 cursor-pointer bg-transparent py-1 text-xs font-semibold text-current outline-none">
-                            {STATUS_OPTIONS.map((status) => <option key={status} value={status} className="bg-[#161b22] text-[#e6edf3]">{status}</option>)}
-                          </select>
-                        </label>
+                        <StatusSelector status={repository.status} repositoryName={repository.fullName} onChange={(status) => updateStatus(repository.id, status)} />
                       </> : (() => { const suggestion = aiOrganization?.projects.find((item) => item.id === repository.id); return suggestion ? <button type="button" onClick={() => updateStatus(repository.id, suggestion.status)} title={`Apply AI suggestion: ${suggestion.status}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#238636]/50 bg-[#238636]/10 px-3 text-xs font-medium text-[#3fb950] transition hover:bg-[#238636]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3fb950]"><Check size={13}/> Apply suggestion</button> : <span className="text-xs text-[#8b949e]">No AI suggestion</span>; })()}
                       <a href={repository.url} target="_blank" rel="noreferrer" aria-label={`Open ${repository.name} on GitHub`} title="Open repository on GitHub" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[#8b949e] transition-all hover:-translate-y-0.5 hover:border-[#30363d] hover:bg-[#21262d] hover:text-[#e6edf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] active:scale-[.95]"><ExternalLink size={15} /></a>
                     </div>
