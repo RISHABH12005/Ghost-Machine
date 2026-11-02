@@ -47,7 +47,16 @@ function safeWorkspace(value: unknown) {
 function getSql() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not configured.");
-  return neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(12_000) } });
+  // Leave enough time for Neon cold starts and transient connection setup.
+  return neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(25_000) } });
+}
+
+function describeDatabaseError(error: unknown) {
+  const value = error !== null && typeof error === "object" ? error as Record<string, unknown> : {};
+  const code = typeof value.code === "string" ? value.code : undefined;
+  const name = error instanceof Error ? error.name : "UnknownError";
+  const message = error instanceof Error ? error.message : String(error);
+  return { name, code, message: message.slice(0, 500) };
 }
 
 function responseHeaders() {
@@ -85,8 +94,9 @@ export async function GET(request: NextRequest) {
       updatedAt: row.updated_at,
     }, { headers: responseHeaders() });
   } catch (error) {
-    console.error("[workspace] GET failed:", error);
-    return NextResponse.json({ error: "Could not load saved workspace data. Check the database connection and try again." }, { status: 503, headers: responseHeaders() });
+    const detail = describeDatabaseError(error);
+    console.error("[workspace] GET failed", JSON.stringify({ ...detail, operation: "GET" }));
+    return NextResponse.json({ error: "Could not load saved workspace data.", errorCode: detail.code || detail.name }, { status: 503, headers: responseHeaders() });
   }
 }
 
@@ -139,7 +149,8 @@ export async function PUT(request: NextRequest) {
     `;
     return NextResponse.json({ saved: true }, { headers: responseHeaders() });
   } catch (error) {
-    console.error("[workspace] PUT failed:", error);
-    return NextResponse.json({ error: "Could not save workspace data. Check the database connection and try again." }, { status: 503, headers: responseHeaders() });
+    const detail = describeDatabaseError(error);
+    console.error("[workspace] PUT failed", JSON.stringify({ ...detail, operation: "PUT", databaseConfigured: Boolean(process.env.DATABASE_URL) }));
+    return NextResponse.json({ error: "Could not save workspace data.", errorCode: detail.code || detail.name }, { status: 503, headers: responseHeaders() });
   }
 }
