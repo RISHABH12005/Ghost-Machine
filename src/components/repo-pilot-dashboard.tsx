@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   AlertCircle, ArrowLeft, BookOpen, Check, CheckCircle2, ChevronRight,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
-  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, RefreshCw,
+  GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, RefreshCw,
   Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
@@ -567,7 +567,7 @@ export default function RepoPilotDashboard() {
 
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 border-b border-[#30363d] pb-5 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0"><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">{activeNav === "Dashboard" ? "Dashboard" : activeNav === "Repositories" ? "Your repositories" : activeNav}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8b949e]">{activeNav === "Overview" ? "Review your repositories, assess project health, and decide what to work on next." : activeNav === "Repositories" ? "Browse, search, categorize, and update your GitHub repositories." : activeNav === "Work board" ? "Track projects currently in progress." : activeNav === "Priorities" ? "Focus on repositories that need attention first." : activeNav === "Activity history" ? "Review your recent workspace changes." : "Manage your GitHub account and workspace preferences."}</p></div>
+            <div className="flex min-w-0 items-start gap-3"><button type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open navigation menu" aria-expanded={mobileMenuOpen} className="mt-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#30363d] bg-[#161b22] text-[#c9d1d9] transition hover:border-[#58a6ff] hover:bg-[#21262d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] lg:hidden"><Menu size={19}/></button><div className="min-w-0"><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px]">{activeNav === "Dashboard" ? "Dashboard" : activeNav === "Repositories" ? "Your repositories" : activeNav}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8b949e]">{activeNav === "Overview" ? "Review your repositories, assess project health, and decide what to work on next." : activeNav === "Repositories" ? "Browse, search, categorize, and update your GitHub repositories." : activeNav === "Work board" ? "Track projects currently in progress." : activeNav === "Priorities" ? "Focus on repositories that need attention first." : activeNav === "Activity history" ? "Review your recent workspace changes." : "Manage your GitHub account and workspace preferences."}</p></div></div>
             
           </div>
 
