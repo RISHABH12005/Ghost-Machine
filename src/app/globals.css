@@ -56,3 +56,18 @@ body::-webkit-scrollbar,
   width: 0;
   height: 0;
 }
+
+/* Discourage casual selection of static UI while keeping form text editable. */
+body,
+body * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+[role="textbox"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
