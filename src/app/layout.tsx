@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import BrowserProtection from "@/components/security/browser-protection";
 
 export const metadata: Metadata = {
   title: "RepoPilot — Your GitHub command center",
@@ -14,7 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <BrowserProtection />
+        {children}
+      </body>
     </html>
   );
 }
