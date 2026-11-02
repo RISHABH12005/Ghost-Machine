@@ -6,7 +6,7 @@ import {
   AlertCircle, ArrowLeft, BookOpen, Check, CheckCircle2, ChevronRight,
   CircleDot, Clock3, ExternalLink, Filter, FolderGit2,
   GitBranch, Github, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, RefreshCw,
-  Menu, Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
+  Search, Settings2, ShieldAlert, Sparkles, Star, Trash2, X,
 } from "lucide-react";
 import type { ProjectStatus, Repository, RepositoryImportResponse } from "@/types/repository";
 
