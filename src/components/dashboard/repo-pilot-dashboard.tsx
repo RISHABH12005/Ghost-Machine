@@ -641,9 +641,19 @@ export default function RepoPilotDashboard() {
     });
   };
 
-  const attentionCount = repositories.filter((repo) => repo.status === "Needs attention").length;
-  const inProgressCount = repositories.filter((repo) => repo.status === "In progress").length;
-  const completedCount = repositories.filter((repo) => repo.status === "Completed").length;
+  const statusCounts = useMemo(() => {
+    const counts = Object.fromEntries(STATUS_OPTIONS.map((status) => [status, 0])) as Record<ProjectStatus, number>;
+    for (const repository of repositories) {
+      const suggestedStatus = organizationMode === "ai"
+        ? aiOrganization?.projects.find((item) => item.id === repository.id)?.status
+        : undefined;
+      counts[suggestedStatus || repository.status] += 1;
+    }
+    return counts;
+  }, [repositories, organizationMode, aiOrganization]);
+  const attentionCount = statusCounts["Needs attention"];
+  const inProgressCount = statusCounts["In progress"];
+  const completedCount = statusCounts.Completed;
   const isOverviewPage = pathname === "/dashboard" || pathname === "/";
   const isRepositoryPage = isOverviewPage || ["/repositories", "/work-board", "/priorities"].includes(pathname);
   const isActivityPage = pathname === "/activity";
@@ -810,18 +820,21 @@ export default function RepoPilotDashboard() {
 
           {error && <div role="alert" className="mt-4 flex items-start gap-2 rounded-md border border-[#da3633]/50 bg-[#da3633]/10 p-3 text-sm text-[#ff7b72]"><AlertCircle size={17} className="mt-0.5 shrink-0" /><div className="flex-1">{error}</div><button onClick={() => void importRepositories()} className="font-medium underline underline-offset-4">Retry</button></div>}
 
-          {isOverviewPage && <section aria-label="Repository filters" className="mt-5 flex flex-wrap items-center gap-1 rounded-md border border-[#30363d] bg-[#0d1117] p-2">
+          {isOverviewPage && <section aria-label="Repository status filters" className="mt-5 flex flex-wrap items-center gap-1.5 rounded-md border border-[#30363d] bg-[#0d1117] p-2">
             {([
-              { label: "Repositories", value: repositories.length, icon: FolderGit2, filter: "All projects", activeClass: "border-[#58a6ff]/50 bg-[#1f3a5f]/50 text-[#79c0ff]" },
-              { label: "In progress", value: inProgressCount, icon: GitBranch, filter: "In progress", activeClass: "border-[#8957e5]/70 bg-[#2b1f45]/70 text-[#d2a8ff]" },
-              { label: "Needs attention", value: attentionCount, icon: ShieldAlert, filter: "Needs attention", activeClass: "border-[#d29922]/60 bg-[#3d2e12]/60 text-[#e3b341]" },
-              { label: "Completed", value: completedCount, icon: Check, filter: "Completed", activeClass: "border-[#238636]/60 bg-[#12351f]/70 text-[#3fb950]" },
+              { label: "Repositories", value: repositories.length, icon: FolderGit2, filter: "All projects", textClass: "text-[#79c0ff]", activeClass: "border-[#1f6feb]/65 bg-[#1f3a5f]/45 text-[#79c0ff]" },
+              { label: "Not assessed", value: statusCounts["Not assessed"], icon: CircleDot, filter: "Not assessed", textClass: "text-[#aab2bd]", activeClass: "border-[#6e7681]/65 bg-[#6e7681]/15 text-[#aab2bd]" },
+              { label: "Needs review", value: statusCounts["Needs review"], icon: BookOpen, filter: "Needs review", textClass: "text-[#d2a8ff]", activeClass: "border-[#8957e5]/65 bg-[#2b1f45]/60 text-[#d2a8ff]" },
+              { label: "In progress", value: inProgressCount, icon: GitBranch, filter: "In progress", textClass: "text-[#79c0ff]", activeClass: "border-[#1f6feb]/65 bg-[#1f3a5f]/50 text-[#79c0ff]" },
+              { label: "Needs attention", value: attentionCount, icon: ShieldAlert, filter: "Needs attention", textClass: "text-[#ff7b72]", activeClass: "border-[#da3633]/65 bg-[#3b171b]/65 text-[#ff7b72]" },
+              { label: "Completed", value: completedCount, icon: Check, filter: "Completed", textClass: "text-[#3fb950]", activeClass: "border-[#238636]/65 bg-[#12351f]/65 text-[#3fb950]" },
+              { label: "On hold", value: statusCounts["On hold"], icon: Clock3, filter: "On hold", textClass: "text-[#e3b341]", activeClass: "border-[#9e6a03]/65 bg-[#3d2e12]/55 text-[#e3b341]" },
             ] as const).map((item) => {
               const selected = filter === item.filter;
-              return <button key={item.label} type="button" aria-pressed={selected} onClick={() => { setFilter(selected && item.filter !== "All projects" ? "All projects" : item.filter); setQuery(""); }} className={`inline-flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] ${selected ? item.activeClass : "border-transparent text-[#8b949e] hover:border-[#30363d] hover:bg-[#161b22] hover:text-[#e6edf3]"}`}>
-                <item.icon size={15} className={selected ? "shrink-0" : "shrink-0 text-[#8b949e]"}/>
-                <span>{item.label}</span>
-                <span className={`font-semibold tabular-nums ${selected ? "text-current" : "text-[#e6edf3]"}`}>{item.value}</span>
+              return <button key={item.label} type="button" aria-pressed={selected} onClick={() => { setFilter(selected && item.filter !== "All projects" ? "All projects" : item.filter); setQuery(""); }} className={`inline-flex min-h-10 items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] sm:px-3 sm:text-sm ${selected ? item.activeClass : `border-transparent ${item.textClass} hover:border-[#30363d] hover:bg-[#161b22]`}`}>
+                <item.icon size={15} className="shrink-0"/>
+                <span className="whitespace-nowrap">{item.label}</span>
+                <span className="font-semibold tabular-nums">{item.value}</span>
               </button>;
             })}
             <span className="ml-auto hidden px-2 text-xs text-[#8b949e] lg:inline">{lastSynced ? `Last synced at ${lastSynced}` : "Waiting for import"}</span>
