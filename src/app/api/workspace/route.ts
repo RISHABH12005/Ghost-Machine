@@ -119,8 +119,24 @@ export async function PUT(request: NextRequest) {
   if (!session) return NextResponse.json({ error: "Sign in with GitHub to save your workspace." }, { status: 401, headers: responseHeaders() });
 
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
-    return NextResponse.json({ error: "Cross-origin workspace updates are not allowed." }, { status: 403, headers: responseHeaders() });
+  if (origin) {
+    // Render terminates public HTTPS and forwards the request to Next.js over HTTP.
+    // request.url can therefore contain an internal origin. Compare against the
+    // configured public app origin instead of the internal upstream URL.
+    const configuredOrigin = process.env.APP_ORIGIN || process.env.RENDER_EXTERNAL_URL;
+    let expectedOrigin: string;
+    let receivedOrigin: string;
+    try {
+      expectedOrigin = configuredOrigin ? new URL(configuredOrigin).origin : new URL(request.url).origin;
+      receivedOrigin = new URL(origin).origin;
+    } catch {
+      console.warn("[workspace] Rejected invalid request origin", JSON.stringify({ operation: "PUT" }));
+      return NextResponse.json({ error: "Invalid workspace request origin." }, { status: 403, headers: responseHeaders() });
+    }
+    if (receivedOrigin !== expectedOrigin) {
+      console.warn("[workspace] Rejected cross-origin update", JSON.stringify({ operation: "PUT", receivedOrigin, expectedOrigin }));
+      return NextResponse.json({ error: "Cross-origin workspace updates are not allowed." }, { status: 403, headers: responseHeaders() });
+    }
   }
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > 1_500_000) return NextResponse.json({ error: "Workspace data is too large to save." }, { status: 413, headers: responseHeaders() });
