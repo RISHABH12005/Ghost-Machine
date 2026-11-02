@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       if (pageRepositories.length < 100) break;
     }
 
-    const repositories = allRepositories.filter((repository) => !repository.fork).map((repository) => ({
+    const repositories = allRepositories.map((repository) => ({
       id: repository.id, name: repository.name, fullName: repository.full_name, url: repository.html_url,
       description: repository.description || "No repository description yet.",
       language: repository.language || "Not specified", stars: repository.stargazers_count,
