@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
+import { incrementWorkspaceAiUsage } from "@/lib/workspace/database";
 
 export const dynamic = "force-dynamic";
 
@@ -142,7 +143,9 @@ export async function POST(request: NextRequest) {
     }
     const order = new Map(repositories.map((repo, index) => [repo.id, index]));
     projects.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-    return NextResponse.json({ projects, model, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+    const aiUsage = await incrementWorkspaceAiUsage(session.login, "organization");
+    console.info("[ai-usage] Recorded successful repository organization", JSON.stringify({ kind: "organization" }));
+    return NextResponse.json({ projects, model, generatedAt: new Date().toISOString(), aiUsage }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "AI organization failed." }, { status: 502 });
   }
