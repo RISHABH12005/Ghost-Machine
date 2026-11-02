@@ -47,7 +47,7 @@ function safeWorkspace(value: unknown) {
 function getSql() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not configured.");
-  return neon(connectionString);
+  return neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(12_000) } });
 }
 
 function responseHeaders() {
