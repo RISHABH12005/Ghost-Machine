@@ -77,18 +77,51 @@ function toAiUsage(value: unknown): AiUsage {
 /** Load the full saved transcript. Chat history is stored separately from autosaved workspace settings. */
 export async function loadWorkspaceAiChatMessages(githubLogin: string, repositoryFullName: string): Promise<WorkspaceAiChatMessage[]> {
   const sql = getWorkspaceSql();
+  const login = githubLogin.toLowerCase();
+  const repository = repositoryFullName.toLowerCase();
   const rows = await sql`
     SELECT role, content
     FROM public.ghost_machine_ai_chat_messages
-    WHERE github_login = ${githubLogin.toLowerCase()}
-      AND repository_full_name = ${repositoryFullName.toLowerCase()}
+    WHERE github_login = ${login}
+      AND repository_full_name = ${repository}
       AND conversation_id = 'default'
     ORDER BY id ASC
   `;
-  return rows.flatMap((row) => {
-    if ((row.role !== "user" && row.role !== "assistant") || typeof row.content !== "string") return [];
-    return [{ role: row.role, content: row.content }];
-  });
+  if (rows.length) {
+    return rows.flatMap((row) => {
+      if ((row.role !== "user" && row.role !== "assistant") || typeof row.content !== "string") return [];
+      return [{ role: row.role, content: row.content }];
+    });
+  }
+
+  // One-time compatibility migration: older builds stored up to 60 chat turns
+  // inside the autosaved workspace JSON. Move those messages into the history table.
+  const legacy = await sql`
+    SELECT workspace->'aiChatMessages' AS messages
+    FROM public.ghost_machine_workspace_state
+    WHERE github_login = ${login}
+    LIMIT 1
+  `;
+  const raw = legacy[0]?.messages as unknown;
+  const parsed = typeof raw === "string" ? JSON.parse(raw) as unknown : raw;
+  const legacyMessages = Array.isArray(parsed) ? parsed.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const item = entry as Record<string, unknown>;
+    if ((item.role !== "user" && item.role !== "assistant") || typeof item.content !== "string" || !item.content.trim()) return [];
+    return [{ role: item.role, content: item.content }];
+  }) : [];
+  if (legacyMessages.length) {
+    await sql.begin(async (transaction) => {
+      for (const message of legacyMessages) {
+        await transaction`
+          INSERT INTO public.ghost_machine_ai_chat_messages
+            (github_login, repository_full_name, conversation_id, role, content)
+          VALUES (${login}, ${repository}, 'default', ${message.role}, ${message.content})
+        `;
+      }
+    });
+  }
+  return legacyMessages;
 }
 
 /** Save both sides of a successful AI turn and increment the account usage counter atomically. */
@@ -139,6 +172,15 @@ export async function clearWorkspaceAiChat(githubLogin: string, repositoryFullNa
     WHERE github_login = ${githubLogin.toLowerCase()}
       AND repository_full_name = ${repositoryFullName.toLowerCase()}
       AND conversation_id = 'default'
+  `;
+}
+
+/** Remove all saved AI chat transcripts for an account when its workspace is reset. */
+export async function clearAllWorkspaceAiChats(githubLogin: string): Promise<void> {
+  const sql = getWorkspaceSql();
+  await sql`
+    DELETE FROM public.ghost_machine_ai_chat_messages
+    WHERE github_login = ${githubLogin.toLowerCase()}
   `;
 }
 
