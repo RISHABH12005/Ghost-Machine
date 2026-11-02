@@ -798,10 +798,10 @@ export default function RepoPilotDashboard() {
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {mobileMenuOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
       <aside id="workspace-sidebar" style={{ width: mobileMenuOpen ? "min(280px, 85vw)" : sidebarWidth, boxSizing: "border-box" }} className={`fixed inset-y-0 left-0 z-40 flex flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-r border-[#30363d] bg-[#0d1117] py-4 transition-[width,transform] duration-200 ease-out lg:translate-x-0 ${sidebarCollapsed && !mobileMenuOpen ? "px-2" : "px-3"} ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className={`flex min-w-0 items-center gap-2 pb-4 ${sidebarCollapsed && !mobileMenuOpen ? "justify-center" : "px-2"}`}>
+        <div className={`relative flex w-full min-w-0 items-center gap-2 pb-4 ${sidebarCollapsed && !mobileMenuOpen ? "justify-center" : "px-2"}`}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f0f6fc] text-[#0d1117]"><Github size={22} /></div>
           {(!sidebarCollapsed || mobileMenuOpen) && <div className="min-w-0 flex-1 overflow-hidden"><p className="truncate text-sm font-semibold text-[#f0f6fc]">RepoPilot</p><p className="text-xs leading-4 text-[#8b949e]">Your repository workspace</p></div>}
-          <button className="ml-auto rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
+          <button className="absolute right-0 top-0 rounded-md p-1.5 text-[#8b949e] hover:bg-[#21262d] lg:hidden" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={17} /></button>
         </div>
         {(!sidebarCollapsed || mobileMenuOpen) && <div className="mt-5 px-2 text-xs font-semibold text-[#8b949e]">Workspace</div>}
         <nav className="mt-2 space-y-1">
