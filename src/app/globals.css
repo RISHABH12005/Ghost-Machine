@@ -43,7 +43,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 
 a { text-underline-offset: 3px; }
 
-.soft-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: #30363d transparent;
+/* Keep scrolling functional while hiding browser scrollbar tracks and arrow buttons. */
+html, body, * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
