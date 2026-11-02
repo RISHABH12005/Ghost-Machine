@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { getWorkspaceSql } from "@/lib/workspace/database";
+import { clearAllWorkspaceAiChats, getWorkspaceSql } from "@/lib/workspace/database";
 import { openSession, SESSION_COOKIE } from "@/lib/auth/github-session";
 
 export const dynamic = "force-dynamic";
@@ -197,7 +197,8 @@ export async function DELETE(request: NextRequest) {
         workspace = EXCLUDED.workspace,
         updated_at = now()
     `;
-    console.info("[workspace] DELETE cleared", JSON.stringify({ operation: "DELETE" }));
+    await clearAllWorkspaceAiChats(session.login);
+    console.info("[workspace] DELETE cleared", JSON.stringify({ operation: "DELETE", chatHistoryCleared: true }));
     return NextResponse.json({ cleared: true }, { headers: responseHeaders() });
   } catch (error) {
     const detail = describeDatabaseError(error);

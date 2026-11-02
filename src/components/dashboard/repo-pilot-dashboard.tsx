@@ -16,12 +16,20 @@ type AiOrganization = { projects: AiProjectSuggestion[]; model: string; generate
 type RepositoryAssessment = { status: ProjectStatus; confidence: string; assessedAt: string; evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }>; limitations?: string[]; error?: string };
 const STATUS_OPTIONS: ProjectStatus[] = ["Not assessed", "Needs review", "In progress", "Needs attention", "Completed", "On hold"];
 const STATUS_STYLES: Record<ProjectStatus, string> = {
-  "Not assessed": "border-[#6e7681]/50 text-[#8b949e]",
-  "Needs review": "border-[#8b949e]/40 text-[#c9d1d9]",
-  "In progress": "border-[#1f6feb]/70 text-[#79c0ff]",
-  "Needs attention": "border-[#d29922]/70 text-[#e3b341]",
-  Completed: "border-[#238636]/70 text-[#3fb950]",
-  "On hold": "border-[#6e7681]/50 text-[#8b949e]",
+  "Not assessed": "border-[#6e7681]/60 bg-[#6e7681]/10 text-[#aab2bd]",
+  "Needs review": "border-[#8957e5]/60 bg-[#8957e5]/12 text-[#d2a8ff]",
+  "In progress": "border-[#1f6feb]/70 bg-[#1f6feb]/12 text-[#79c0ff]",
+  "Needs attention": "border-[#da3633]/65 bg-[#da3633]/12 text-[#ff7b72]",
+  Completed: "border-[#238636]/65 bg-[#238636]/12 text-[#3fb950]",
+  "On hold": "border-[#9e6a03]/65 bg-[#9e6a03]/12 text-[#e3b341]",
+};
+const STATUS_DOT_STYLES: Record<ProjectStatus, string> = {
+  "Not assessed": "bg-[#8b949e]",
+  "Needs review": "bg-[#a371f7]",
+  "In progress": "bg-[#58a6ff]",
+  "Needs attention": "bg-[#f85149]",
+  Completed: "bg-[#3fb950]",
+  "On hold": "bg-[#d29922]",
 };
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
@@ -141,6 +149,7 @@ export default function RepoPilotDashboard() {
   const [aiChatMessages, setAiChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatSending, setAiChatSending] = useState(false);
+  const [aiChatHistoryLoading, setAiChatHistoryLoading] = useState(false);
   const [aiChatError, setAiChatError] = useState("");
   const [copiedChatIndex, setCopiedChatIndex] = useState<number | null>(null);
   const aiChatEndRef = useRef<HTMLDivElement>(null);
@@ -157,9 +166,8 @@ export default function RepoPilotDashboard() {
     assessments,
     workspace: {
       statuses: Object.fromEntries(repositories.map((repository) => [String(repository.id), repository.status])),
-      aiChatMessages: aiChatMessages.slice(-60),
     },
-  }), [activity, aiSummaries, aiOrganization, assessments, repositories, aiChatMessages]);
+  }), [activity, aiSummaries, aiOrganization, assessments, repositories]);
 
   useEffect(() => {
     if (!username) {
@@ -209,7 +217,7 @@ export default function RepoPilotDashboard() {
           ...repository,
           status: statuses[String(repository.id)] || repository.status,
         })));
-        setAiChatMessages(Array.isArray(saved.workspace?.aiChatMessages) ? saved.workspace.aiChatMessages : []);
+        // Repository chat history loads separately from the persistent chat-history API.
         setWorkspaceHydrated(true);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load saved workspace data.");
@@ -459,9 +467,8 @@ export default function RepoPilotDashboard() {
   const sendAiChatMessage = async (prompt?: string) => {
     const message = (prompt ?? aiChatInput).trim();
     const selectedRepository = aiChatRepositories.find((item) => item.id === aiChatRepositoryId) || aiChatRepositories[0];
-    if (!message || !selectedRepository || aiChatSending || message.length > 4000) return;
-    const nextMessages = [...aiChatMessages, { role: "user" as const, content: message }];
-    setAiChatMessages(nextMessages);
+    if (!message || !selectedRepository || aiChatSending || aiChatHistoryLoading) return;
+    setAiChatMessages((items) => [...items, { role: "user", content: message }]);
     setAiChatInput("");
     setAiChatError("");
     setAiChatSending(true);
@@ -470,7 +477,7 @@ export default function RepoPilotDashboard() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner, repo: repoName, messages: nextMessages }),
+        body: JSON.stringify({ owner, repo: repoName, message }),
       });
       const result = await response.json() as { reply?: string; model?: string; error?: string; aiUsage?: typeof aiUsage };
       if (!response.ok) throw new Error(result.error || "AI Talk could not respond.");
@@ -495,13 +502,24 @@ export default function RepoPilotDashboard() {
     }
   };
 
-  const startNewAiChat = () => {
-    if (aiChatSending) return;
-    setAiChatMessages([]);
-    setAiChatInput("");
-    setAiChatError("");
-    setCopiedChatIndex(null);
-    aiChatComposerRef.current?.focus();
+  const startNewAiChat = async () => {
+    if (aiChatSending || aiChatHistoryLoading || !selectedAiRepository) return;
+    const confirmed = window.confirm("Start a new chat? This permanently clears the saved conversation for this repository.");
+    if (!confirmed) return;
+    const [owner, repoName] = selectedAiRepository.fullName.split("/");
+    try {
+      const params = new URLSearchParams({ owner, repo: repoName });
+      const response = await fetch(`/api/ai/chat?${params.toString()}`, { method: "DELETE" });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Could not clear this conversation.");
+      setAiChatMessages([]);
+      setAiChatInput("");
+      setAiChatError("");
+      setCopiedChatIndex(null);
+      aiChatComposerRef.current?.focus();
+    } catch (cause) {
+      setAiChatError(cause instanceof Error ? cause.message : "Could not clear this conversation.");
+    }
   };
 
   const assessRepository = async (repository: Repository) => {
@@ -540,6 +558,36 @@ export default function RepoPilotDashboard() {
     const search = aiRepoSearch.trim().toLowerCase();
     return aiChatRepositories.filter((repository) => !search || repository.fullName.toLowerCase().includes(search));
   }, [aiChatRepositories, aiRepoSearch]);
+
+  const selectedAiRepositoryFullName = selectedAiRepository?.fullName || "";
+  useEffect(() => {
+    if (!username || !selectedAiRepositoryFullName) {
+      setAiChatMessages([]);
+      setAiChatHistoryLoading(false);
+      return;
+    }
+
+    let active = true;
+    const [owner, repoName] = selectedAiRepositoryFullName.split("/");
+    setAiChatMessages([]);
+    setAiChatError("");
+    setAiChatHistoryLoading(true);
+    const params = new URLSearchParams({ owner, repo: repoName });
+    void fetch(`/api/ai/chat?${params.toString()}`, { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({})) as { messages?: Array<{ role: "user" | "assistant"; content: string }>; error?: string };
+        if (!response.ok) throw new Error(result.error || "Could not load saved chat history.");
+        if (active) setAiChatMessages(Array.isArray(result.messages) ? result.messages : []);
+      })
+      .catch((cause) => {
+        if (active) setAiChatError(cause instanceof Error ? cause.message : "Could not load saved chat history.");
+      })
+      .finally(() => {
+        if (active) setAiChatHistoryLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [username, selectedAiRepositoryFullName]);
 
   useEffect(() => {
     aiChatEndRef.current?.scrollIntoView({ behavior: aiChatSending ? "smooth" : "auto", block: "end" });
@@ -651,7 +699,7 @@ export default function RepoPilotDashboard() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <button type="button" onClick={startNewAiChat} disabled={!aiChatMessages.length || aiChatSending} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10 hover:text-[#e6d5ff] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"><Plus size={14}/> <span className="hidden sm:inline">New chat</span></button>
+                    <button type="button" onClick={startNewAiChat} disabled={!aiChatMessages.length || aiChatSending || aiChatHistoryLoading} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:border-[#8957e5]/60 hover:bg-[#8957e5]/10 hover:text-[#e6d5ff] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"><Plus size={14}/> <span className="hidden sm:inline">New chat</span></button>
                     <button type="button" onClick={() => pathname === "/ai-talk" ? router.push("/dashboard") : toggleAiSidebar()} aria-label={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} title={pathname === "/ai-talk" ? "Back to dashboard" : "Close AI Talk"} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#30363d] px-2.5 text-xs font-medium text-[#c9d1d9] transition hover:bg-[#21262d] sm:px-3 sm:text-sm">{pathname === "/ai-talk" ? <><ArrowLeft size={15}/><span className="hidden sm:inline">Back to dashboard</span></> : <X size={16}/>}</button>
                   </div>
                 </div>
@@ -686,7 +734,7 @@ export default function RepoPilotDashboard() {
 
             <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-7">
-                {!aiChatRepositories.length ? <div className="my-auto rounded-2xl border border-dashed border-[#30363d] bg-[#161b22]/60 p-6 text-center">
+                {aiChatHistoryLoading ? <div className="my-auto flex items-center justify-center gap-2 py-20 text-sm text-[#8b949e]" role="status"><LoaderCircle size={16} className="animate-spin text-[#d2a8ff]"/> Loading your saved conversation…</div> : !aiChatRepositories.length ? <div className="my-auto rounded-2xl border border-dashed border-[#30363d] bg-[#161b22]/60 p-6 text-center">
                   <Github size={24} className="mx-auto text-[#8b949e]"/>
                   <h3 className="mt-3 text-sm font-semibold text-[#f0f6fc]">No repositories available</h3>
                   <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#8b949e]">Sync GitHub or check your repository access. AI Talk can answer questions after at least one repository is loaded.</p>
@@ -739,10 +787,10 @@ export default function RepoPilotDashboard() {
             <footer className="shrink-0 border-t border-[#30363d] bg-[#0d1117]/95 p-3 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur sm:p-4">
               <form onSubmit={(event) => { event.preventDefault(); void sendAiChatMessage(); }} className="mx-auto w-full max-w-5xl">
                 <div className="rounded-2xl border border-[#30363d] bg-[#161b22] p-2 shadow-[0_-10px_35px_rgba(0,0,0,.12)] transition focus-within:border-[#8957e5]/75 focus-within:shadow-[0_0_0_3px_rgba(137,87,229,.10)]">
-                  <textarea ref={aiChatComposerRef} value={aiChatInput} onChange={(event) => { setAiChatInput(event.target.value); if (aiChatError) setAiChatError(""); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder={selectedAiRepository ? `Ask anything about ${selectedAiRepository.name}…` : "Choose a repository to start asking questions…"} rows={2} maxLength={4000} disabled={!aiChatRepositories.length || aiChatSending} className="max-h-36 min-h-[54px] w-full resize-y bg-transparent px-3 py-2 text-sm leading-6 text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
+                  <textarea ref={aiChatComposerRef} value={aiChatInput} onChange={(event) => { setAiChatInput(event.target.value); if (aiChatError) setAiChatError(""); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendAiChatMessage(); } }} placeholder={selectedAiRepository ? `Ask anything about ${selectedAiRepository.name}…` : "Choose a repository to start asking questions…"} rows={2} disabled={!aiChatRepositories.length || aiChatSending || aiChatHistoryLoading} className="max-h-36 min-h-[54px] w-full resize-y bg-transparent px-3 py-2 text-sm leading-6 text-[#e6edf3] outline-none placeholder:text-[#6e7681] disabled:opacity-50"/>
                   <div className="flex items-center justify-between gap-2 border-t border-[#30363d]/70 px-1 pt-2">
-                    <div className="flex min-w-0 items-center gap-3 text-[10px] text-[#6e7681]"><span className="hidden items-center gap-1 sm:inline-flex"><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Enter</kbd> to send</span><span className="hidden sm:inline">·</span><span><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Shift + Enter</kbd> for new line</span><span className={`hidden tabular-nums sm:inline ${aiChatInput.length > 3800 ? "text-[#e3b341]" : ""}`}>{aiChatInput.length.toLocaleString()} / 4,000</span></div>
-                    <button type="submit" disabled={!aiChatInput.trim() || !aiChatRepositories.length || aiChatSending || aiChatInput.length > 4000} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-[#8957e5] px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#a371f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a1ff] disabled:cursor-not-allowed disabled:opacity-40"><Send size={14}/><span>Send</span></button>
+                    <div className="flex min-w-0 items-center gap-3 text-[10px] text-[#6e7681]"><span className="hidden items-center gap-1 sm:inline-flex"><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Enter</kbd> to send</span><span className="hidden sm:inline">·</span><span><kbd className="rounded border border-[#30363d] bg-[#0d1117] px-1.5 py-0.5 font-sans">Shift + Enter</kbd> for new line</span><span className={`hidden tabular-nums sm:inline `}>{aiChatInput.length.toLocaleString()} characters</span></div>
+                    <button type="submit" disabled={!aiChatInput.trim() || !aiChatRepositories.length || aiChatSending || aiChatHistoryLoading} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-[#8957e5] px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#a371f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a1ff] disabled:cursor-not-allowed disabled:opacity-40"><Send size={14}/><span>Send</span></button>
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] text-[#6e7681]"><span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#3fb950]"/> AI answers use GitHub metadata, recent activity and README.</span><span>Verify important recommendations before acting.</span></div>
@@ -847,7 +895,12 @@ export default function RepoPilotDashboard() {
                       <button type="button" title="Check repository activity and project health signals" aria-busy={assessingId === repository.id} onClick={() => void assessRepository(repository)} disabled={assessingId !== null} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#30363d] bg-[#161b22] px-3 text-xs font-medium text-[#c9d1d9] shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-[#8b949e] hover:bg-[#21262d] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] active:translate-y-0 active:scale-[.97] disabled:cursor-wait disabled:opacity-50">{assessingId === repository.id ? <LoaderCircle size={13} className="animate-spin" /> : <ShieldAlert size={13} />}{assessingId === repository.id ? "Assessing…" : "Assess"}</button>
                       {organizationMode === "manual" ? <>
                         <label className="sr-only" htmlFor={`status-${repository.id}`}>Manual status for {repository.name}</label>
-                        <select id={`status-${repository.id}`} title="Change the manual project status" value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className={`min-h-9 max-w-[180px] cursor-pointer rounded-lg border bg-[#161b22] px-3 text-xs font-medium text-[#e6edf3] shadow-sm outline-none transition-all hover:bg-[#21262d] focus:border-[#2f81f7] focus:ring-2 focus:ring-[#2f81f7]/20 ${repository.status === "Completed" ? "border-[#238636]/60" : repository.status === "Needs attention" ? "border-[#d29922]/60" : repository.status === "In progress" ? "border-[#1f6feb]/60" : "border-[#30363d]"}`}>{STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select>
+                        <label className="inline-flex min-h-9 max-w-full items-center gap-2 rounded-lg border bg-[#161b22] px-2.5 shadow-sm transition hover:bg-[#21262d] focus-within:ring-2 focus-within:ring-[#8957e5]/25 ${STATUS_STYLES[repository.status]}" title="Change the manual project status">
+                          <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_STYLES[repository.status]}`}/>
+                          <select id={`status-${repository.id}`} value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className="min-w-0 cursor-pointer bg-transparent py-1 text-xs font-semibold text-current outline-none">
+                            {STATUS_OPTIONS.map((status) => <option key={status} value={status} className="bg-[#161b22] text-[#e6edf3]">{status}</option>)}
+                          </select>
+                        </label>
                       </> : (() => { const suggestion = aiOrganization?.projects.find((item) => item.id === repository.id); return suggestion ? <button type="button" onClick={() => updateStatus(repository.id, suggestion.status)} title={`Apply AI suggestion: ${suggestion.status}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#238636]/50 bg-[#238636]/10 px-3 text-xs font-medium text-[#3fb950] transition hover:bg-[#238636]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3fb950]"><Check size={13}/> Apply suggestion</button> : <span className="text-xs text-[#8b949e]">No AI suggestion</span>; })()}
                       <a href={repository.url} target="_blank" rel="noreferrer" aria-label={`Open ${repository.name} on GitHub`} title="Open repository on GitHub" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[#8b949e] transition-all hover:-translate-y-0.5 hover:border-[#30363d] hover:bg-[#21262d] hover:text-[#e6edf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] active:scale-[.95]"><ExternalLink size={15} /></a>
                     </div>
