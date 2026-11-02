@@ -469,11 +469,28 @@ export default function RepoPilotDashboard() {
         note: "",
       })));
       setUsername(data.username);
-      setSidebarCollapsed(false); // Expand navigation when the connected workspace loads.
-      setSidebarWidth(260);
+      const sidebarPreferenceKey = `repopilot-sidebar:${data.username.toLowerCase()}`;
       try {
+        const savedSidebarPreference = localStorage.getItem(sidebarPreferenceKey);
+        if (savedSidebarPreference) {
+          const preference = JSON.parse(savedSidebarPreference) as { collapsed?: boolean; width?: number };
+          const collapsed = typeof preference.collapsed === "boolean" ? preference.collapsed : false;
+          const width = typeof preference.width === "number" && Number.isFinite(preference.width)
+            ? Math.max(76, Math.min(360, preference.width))
+            : collapsed ? 76 : 260;
+          setSidebarCollapsed(collapsed);
+          setSidebarWidth(collapsed ? 76 : Math.max(200, width));
+        } else {
+          // First visit keeps the existing expanded default; later visits restore the user's choice.
+          setSidebarCollapsed(false);
+          setSidebarWidth(260);
+          localStorage.setItem(sidebarPreferenceKey, JSON.stringify({ collapsed: false, width: 260 }));
+        }
         setAiSidebarOpen(localStorage.getItem(`repopilot-ai-sidebar:${data.username.toLowerCase()}`) === "true");
-      } catch { /* Keep safe defaults if saved preferences are malformed. */ }
+      } catch {
+        setSidebarCollapsed(false);
+        setSidebarWidth(260);
+      }
       setLastSynced(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Repository import failed.");
@@ -728,13 +745,33 @@ export default function RepoPilotDashboard() {
     return () => window.clearInterval(interval);
   }, [githubUser, importRepositories]);
 
+  const saveSidebarPreference = (collapsed: boolean, width: number) => {
+    if (!username) return;
+    try {
+      localStorage.setItem(
+        `repopilot-sidebar:${username.toLowerCase()}`,
+        JSON.stringify({ collapsed, width: collapsed ? 76 : width }),
+      );
+    } catch { /* Keep the current in-memory sidebar state if browser storage is unavailable. */ }
+  };
+
   const resizeSidebar = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.buttons !== 1) return;
     const requestedWidth = Math.min(360, event.clientX);
     const collapsed = requestedWidth < 150;
     // Snap to a true icon rail or keep enough room for the full navigation labels.
+    const nextWidth = collapsed ? 76 : Math.max(200, requestedWidth);
     setSidebarCollapsed(collapsed);
-    setSidebarWidth(collapsed ? 76 : Math.max(200, requestedWidth));
+    setSidebarWidth(nextWidth);
+    saveSidebarPreference(collapsed, nextWidth);
+  };
+
+  const toggleSidebar = () => {
+    const nextCollapsed = !sidebarCollapsed;
+    const nextWidth = nextCollapsed ? 76 : 260;
+    setSidebarCollapsed(nextCollapsed);
+    setSidebarWidth(nextWidth);
+    saveSidebarPreference(nextCollapsed, nextWidth);
   };
   const resizeAiChat = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.buttons !== 1) return;
@@ -791,7 +828,7 @@ export default function RepoPilotDashboard() {
         </nav>
         <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeSidebar(event); }} onPointerMove={resizeSidebar} className="absolute right-0 top-0 z-40 hidden h-full w-1 cursor-col-resize touch-none bg-transparent transition-colors hover:bg-[#58a6ff]/50 lg:block" />
         <div className="absolute right-1.5 top-1/2 z-50 hidden -translate-y-1/2 lg:block">
-          <button type="button" onClick={() => { const nextCollapsed = !sidebarCollapsed; setSidebarCollapsed(nextCollapsed); setSidebarWidth(nextCollapsed ? 76 : 260); }} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="flex h-9 w-6 items-center justify-center rounded-full border border-[#30363d] bg-[#161b22] text-[#8b949e] shadow-lg transition hover:border-[#58a6ff] hover:bg-[#1f2937] hover:text-[#e6edf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff]">
+          <button type="button" onClick={toggleSidebar} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className="flex h-9 w-6 items-center justify-center rounded-full border border-[#30363d] bg-[#161b22] text-[#8b949e] shadow-lg transition hover:border-[#58a6ff] hover:bg-[#1f2937] hover:text-[#e6edf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff]">
             <ChevronRight size={15} className={sidebarCollapsed ? "" : "rotate-180"} />
           </button>
         </div>
