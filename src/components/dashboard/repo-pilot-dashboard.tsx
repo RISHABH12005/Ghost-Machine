@@ -16,12 +16,20 @@ type AiOrganization = { projects: AiProjectSuggestion[]; model: string; generate
 type RepositoryAssessment = { status: ProjectStatus; confidence: string; assessedAt: string; evidence: Array<{ kind: string; detail: string; url?: string; observedAt?: string }>; limitations?: string[]; error?: string };
 const STATUS_OPTIONS: ProjectStatus[] = ["Not assessed", "Needs review", "In progress", "Needs attention", "Completed", "On hold"];
 const STATUS_STYLES: Record<ProjectStatus, string> = {
-  "Not assessed": "border-[#6e7681]/50 text-[#8b949e]",
-  "Needs review": "border-[#8b949e]/40 text-[#c9d1d9]",
-  "In progress": "border-[#1f6feb]/70 text-[#79c0ff]",
-  "Needs attention": "border-[#d29922]/70 text-[#e3b341]",
-  Completed: "border-[#238636]/70 text-[#3fb950]",
-  "On hold": "border-[#6e7681]/50 text-[#8b949e]",
+  "Not assessed": "border-[#6e7681]/60 bg-[#6e7681]/10 text-[#aab2bd]",
+  "Needs review": "border-[#8957e5]/60 bg-[#8957e5]/12 text-[#d2a8ff]",
+  "In progress": "border-[#1f6feb]/70 bg-[#1f6feb]/12 text-[#79c0ff]",
+  "Needs attention": "border-[#da3633]/65 bg-[#da3633]/12 text-[#ff7b72]",
+  Completed: "border-[#238636]/65 bg-[#238636]/12 text-[#3fb950]",
+  "On hold": "border-[#9e6a03]/65 bg-[#9e6a03]/12 text-[#e3b341]",
+};
+const STATUS_DOT_STYLES: Record<ProjectStatus, string> = {
+  "Not assessed": "bg-[#8b949e]",
+  "Needs review": "bg-[#a371f7]",
+  "In progress": "bg-[#58a6ff]",
+  "Needs attention": "bg-[#f85149]",
+  Completed: "bg-[#3fb950]",
+  "On hold": "bg-[#d29922]",
 };
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard },
@@ -887,7 +895,12 @@ export default function RepoPilotDashboard() {
                       <button type="button" title="Check repository activity and project health signals" aria-busy={assessingId === repository.id} onClick={() => void assessRepository(repository)} disabled={assessingId !== null} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#30363d] bg-[#161b22] px-3 text-xs font-medium text-[#c9d1d9] shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-[#8b949e] hover:bg-[#21262d] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] active:translate-y-0 active:scale-[.97] disabled:cursor-wait disabled:opacity-50">{assessingId === repository.id ? <LoaderCircle size={13} className="animate-spin" /> : <ShieldAlert size={13} />}{assessingId === repository.id ? "Assessing…" : "Assess"}</button>
                       {organizationMode === "manual" ? <>
                         <label className="sr-only" htmlFor={`status-${repository.id}`}>Manual status for {repository.name}</label>
-                        <select id={`status-${repository.id}`} title="Change the manual project status" value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className={`min-h-9 max-w-[180px] cursor-pointer rounded-lg border bg-[#161b22] px-3 text-xs font-medium text-[#e6edf3] shadow-sm outline-none transition-all hover:bg-[#21262d] focus:border-[#2f81f7] focus:ring-2 focus:ring-[#2f81f7]/20 ${repository.status === "Completed" ? "border-[#238636]/60" : repository.status === "Needs attention" ? "border-[#d29922]/60" : repository.status === "In progress" ? "border-[#1f6feb]/60" : "border-[#30363d]"}`}>{STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select>
+                        <label className="inline-flex min-h-9 max-w-full items-center gap-2 rounded-lg border bg-[#161b22] px-2.5 shadow-sm transition hover:bg-[#21262d] focus-within:ring-2 focus-within:ring-[#8957e5]/25 ${STATUS_STYLES[repository.status]}" title="Change the manual project status">
+                          <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_STYLES[repository.status]}`}/>
+                          <select id={`status-${repository.id}`} value={repository.status} onChange={(event) => updateStatus(repository.id, event.target.value as ProjectStatus)} className="min-w-0 cursor-pointer bg-transparent py-1 text-xs font-semibold text-current outline-none">
+                            {STATUS_OPTIONS.map((status) => <option key={status} value={status} className="bg-[#161b22] text-[#e6edf3]">{status}</option>)}
+                          </select>
+                        </label>
                       </> : (() => { const suggestion = aiOrganization?.projects.find((item) => item.id === repository.id); return suggestion ? <button type="button" onClick={() => updateStatus(repository.id, suggestion.status)} title={`Apply AI suggestion: ${suggestion.status}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#238636]/50 bg-[#238636]/10 px-3 text-xs font-medium text-[#3fb950] transition hover:bg-[#238636]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3fb950]"><Check size={13}/> Apply suggestion</button> : <span className="text-xs text-[#8b949e]">No AI suggestion</span>; })()}
                       <a href={repository.url} target="_blank" rel="noreferrer" aria-label={`Open ${repository.name} on GitHub`} title="Open repository on GitHub" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[#8b949e] transition-all hover:-translate-y-0.5 hover:border-[#30363d] hover:bg-[#21262d] hover:text-[#e6edf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#58a6ff] active:scale-[.95]"><ExternalLink size={15} /></a>
                     </div>
